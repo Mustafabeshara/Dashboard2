@@ -143,7 +143,7 @@ export async function POST(
         data: {
           provider: 'ai-service',
           model: 'fallback-chain',
-          extractedData: result.data,
+          extractedData: result.data as any,
           status: 'COMPLETED',
           processingTime,
         },

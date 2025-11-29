@@ -1,0 +1,324 @@
+// Medical Distribution Dashboard - Local SQLite Schema
+// For offline-first desktop app with cloud sync
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/local-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./local.db"
+}
+
+// ==================== SYNC METADATA ====================
+model SyncMetadata {
+  id              String   @id @default(uuid())
+  entityType      String   @map("entity_type")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  lastCloudUpdate DateTime? @map("last_cloud_update")
+  syncStatus      String   @default("pending") @map("sync_status")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([entityType])
+  @@map("sync_metadata")
+}
+
+// ==================== OFFLINE QUEUE ====================
+model OfflineQueue {
+  id            String   @id @default(uuid())
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id")
+  operation     String   // CREATE, UPDATE, DELETE
+  payload       String   // JSON stringified data
+  priority      Int      @default(0)
+  retryCount    Int      @default(0) @map("retry_count")
+  maxRetries    Int      @default(3) @map("max_retries")
+  status        String   @default("pending") // pending, processing, completed, failed
+  errorMessage  String?  @map("error_message")
+  createdAt     DateTime @default(now()) @map("created_at")
+  processedAt   DateTime? @map("processed_at")
+
+  @@index([status, priority])
+  @@index([entityType, entityId])
+  @@map("offline_queue")
+}
+
+// ==================== USER MANAGEMENT ====================
+model User {
+  id                      String   @id @default(uuid())
+  email                   String   @unique
+  passwordHash            String   @map("password_hash")
+  fullName                String   @map("full_name")
+  role                    String   // UserRole enum as string
+  department              String?
+  phone                   String?
+  isActive                Boolean  @default(true) @map("is_active")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+  lastLogin               DateTime? @map("last_login")
+  notificationPreferences String   @default("{}") @map("notification_preferences")
+  isDeleted               Boolean  @default(false) @map("is_deleted")
+  
+  // Sync tracking
+  cloudId                 String?  @unique @map("cloud_id")
+  syncStatus              String   @default("synced") @map("sync_status")
+  lastSyncedAt            DateTime? @map("last_synced_at")
+  locallyModified         Boolean  @default(false) @map("locally_modified")
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  token        String   @unique
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  userAgent    String?  @map("user_agent")
+  ipAddress    String?  @map("ip_address")
+  
+  // Sync tracking
+  cloudId      String?  @unique @map("cloud_id")
+  syncStatus   String   @default("local") @map("sync_status")
+
+  @@map("sessions")
+}
+
+// ==================== COMPANY MANAGEMENT ====================
+model Company {
+  id                 String   @id @default(uuid())
+  name               String
+  type               String   // CompanyType enum
+  country            String?
+  website            String?
+  primaryContact     String?  @map("primary_contact")
+  email              String?
+  phone              String?
+  address            String?
+  paymentTerms       String?  @map("payment_terms")
+  creditLimit        Float?   @map("credit_limit")
+  currency           String   @default("USD")
+  taxId              String?  @map("tax_id")
+  registrationNumber String?  @map("registration_number")
+  certifications     String?  // JSON string
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  isActive           Boolean  @default(true) @map("is_active")
+  isDeleted          Boolean  @default(false) @map("is_deleted")
+  notes              String?
+  
+  // Sync tracking
+  cloudId            String?  @unique @map("cloud_id")
+  syncStatus         String   @default("synced") @map("sync_status")
+  lastSyncedAt       DateTime? @map("last_synced_at")
+  locallyModified    Boolean  @default(false) @map("locally_modified")
+
+  @@map("companies")
+}
+
+// ==================== PRODUCT & INVENTORY ====================
+model Product {
+  id              String   @id @default(uuid())
+  sku             String   @unique
+  name            String
+  description     String?
+  category        String?
+  subCategory     String?  @map("sub_category")
+  manufacturerId  String?  @map("manufacturer_id")
+  unitOfMeasure   String?  @map("unit_of_measure")
+  costPrice       Float?   @map("cost_price")
+  sellingPrice    Float?   @map("selling_price")
+  currency        String   @default("USD")
+  minStockLevel   Int      @default(0) @map("min_stock_level")
+  maxStockLevel   Int?     @map("max_stock_level")
+  reorderPoint    Int?     @map("reorder_point")
+  leadTimeDays    Int?     @map("lead_time_days")
+  specifications  String?  // JSON string
+  certifications  String?  // JSON string
+  images          String?  // JSON string
+  isActive        Boolean  @default(true) @map("is_active")
+  isDeleted       Boolean  @default(false) @map("is_deleted")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  // Sync tracking
+  cloudId         String?  @unique @map("cloud_id")
+  syncStatus      String   @default("synced") @map("sync_status")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  locallyModified Boolean  @default(false) @map("locally_modified")
+
+  @@map("products")
+}
+
+model Inventory {
+  id                String   @id @default(uuid())
+  productId         String   @map("product_id")
+  batchNumber       String?  @map("batch_number")
+  serialNumber      String?  @map("serial_number")
+  quantity          Int
+  availableQuantity Int      @map("available_quantity")
+  reservedQuantity  Int      @default(0) @map("reserved_quantity")
+  location          String?
+  expiryDate        DateTime? @map("expiry_date")
+  receivedDate      DateTime? @map("received_date")
+  purchaseOrderId   String?  @map("purchase_order_id")
+  unitCost          Float?   @map("unit_cost")
+  totalValue        Float?   @map("total_value")
+  status            String   @default("AVAILABLE")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  // Sync tracking
+  cloudId           String?  @unique @map("cloud_id")
+  syncStatus        String   @default("synced") @map("sync_status")
+  lastSyncedAt      DateTime? @map("last_synced_at")
+  locallyModified   Boolean  @default(false) @map("locally_modified")
+
+  @@map("inventory")
+}
+
+// ==================== CUSTOMER MANAGEMENT ====================
+model Customer {
+  id                 String   @id @default(uuid())
+  name               String
+  type               String   @default("GOVERNMENT")
+  registrationNumber String?  @map("registration_number")
+  taxId              String?  @map("tax_id")
+  address            String?
+  city               String?
+  country            String   @default("Kuwait")
+  primaryContact     String?  @map("primary_contact")
+  email              String?
+  phone              String?
+  paymentTerms       String?  @map("payment_terms")
+  creditLimit        Float?   @map("credit_limit")
+  currentBalance     Float    @default(0) @map("current_balance")
+  departments        String?  // JSON string
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  isActive           Boolean  @default(true) @map("is_active")
+  isDeleted          Boolean  @default(false) @map("is_deleted")
+  
+  // Sync tracking
+  cloudId            String?  @unique @map("cloud_id")
+  syncStatus         String   @default("synced") @map("sync_status")
+  lastSyncedAt       DateTime? @map("last_synced_at")
+  locallyModified    Boolean  @default(false) @map("locally_modified")
+
+  @@map("customers")
+}
+
+// ==================== TENDER MANAGEMENT ====================
+model Tender {
+  id                     String    @id @default(uuid())
+  tenderNumber           String    @unique @map("tender_number")
+  title                  String
+  description            String?
+  customerId             String?   @map("customer_id")
+  department             String?
+  category               String?
+  submissionDeadline     DateTime? @map("submission_deadline")
+  openingDate            DateTime? @map("opening_date")
+  estimatedValue         Float?    @map("estimated_value")
+  currency               String    @default("KWD")
+  status                 String    @default("DRAFT")
+  documents              String?   // JSON string
+  products               String?   // JSON string
+  technicalRequirements  String?   @map("technical_requirements")
+  commercialRequirements String?   @map("commercial_requirements")
+  bondRequired           Boolean   @default(false) @map("bond_required")
+  bondAmount             Float?    @map("bond_amount")
+  createdById            String?   @map("created_by")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  notes                  String?
+  isDeleted              Boolean   @default(false) @map("is_deleted")
+  
+  // Sync tracking
+  cloudId                String?   @unique @map("cloud_id")
+  syncStatus             String    @default("synced") @map("sync_status")
+  lastSyncedAt           DateTime? @map("last_synced_at")
+  locallyModified        Boolean   @default(false) @map("locally_modified")
+
+  @@index([status])
+  @@index([submissionDeadline])
+  @@map("tenders")
+}
+
+// ==================== INVOICE MANAGEMENT ====================
+model Invoice {
+  id            String   @id @default(uuid())
+  invoiceNumber String   @unique @map("invoice_number")
+  customerId    String   @map("customer_id")
+  invoiceDate   DateTime @map("invoice_date")
+  dueDate       DateTime @map("due_date")
+  subtotal      Float
+  taxAmount     Float    @default(0) @map("tax_amount")
+  totalAmount   Float    @map("total_amount")
+  paidAmount    Float    @default(0) @map("paid_amount")
+  currency      String   @default("KWD")
+  status        String   @default("DRAFT")
+  paymentTerms  String?  @map("payment_terms")
+  notes         String?
+  createdById   String?  @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  isDeleted     Boolean  @default(false) @map("is_deleted")
+  
+  // Sync tracking
+  cloudId       String?  @unique @map("cloud_id")
+  syncStatus    String   @default("synced") @map("sync_status")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  locallyModified Boolean @default(false) @map("locally_modified")
+
+  @@index([status])
+  @@index([customerId])
+  @@map("invoices")
+}
+
+// ==================== EXPENSE MANAGEMENT ====================
+model Expense {
+  id               String    @id @default(uuid())
+  expenseNumber    String    @unique @map("expense_number")
+  category         String
+  subCategory      String?   @map("sub_category")
+  description      String
+  amount           Float
+  currency         String    @default("KWD")
+  expenseDate      DateTime  @map("expense_date")
+  paymentMethod    String?   @map("payment_method")
+  vendorId         String?   @map("vendor_id")
+  budgetCategoryId String?   @map("budget_category_id")
+  receiptUrl       String?   @map("receipt_url")
+  status           String    @default("PENDING")
+  createdById      String?   @map("created_by")
+  approvedById     String?   @map("approved_by")
+  approvedDate     DateTime? @map("approved_date")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  notes            String?
+  isDeleted        Boolean   @default(false) @map("is_deleted")
+  
+  // Sync tracking
+  cloudId          String?   @unique @map("cloud_id")
+  syncStatus       String    @default("synced") @map("sync_status")
+  lastSyncedAt     DateTime? @map("last_synced_at")
+  locallyModified  Boolean   @default(false) @map("locally_modified")
+
+  @@index([status])
+  @@map("expenses")
+}
+
+// ==================== APP SETTINGS ====================
+model AppSettings {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  value           String
+  description     String?
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
