@@ -41,6 +41,8 @@ model User {
   createdTenders          Tender[]
   auditLogs               AuditLog[]
   sessions                Session[]
+  uploadedDocuments       Document[]           @relation("DocumentUploadedBy")
+  reviewedExtractions     DocumentExtraction[] @relation("ExtractionReviewedBy")
 
   @@map("users")
 }
@@ -560,4 +562,165 @@ model AuditLog {
   @@index([userId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ==================== DOCUMENT MANAGEMENT ====================
+
+model Document {
+  id               String             @id @default(uuid())
+  name             String
+  originalName     String             @map("original_name")
+  mimeType         String             @map("mime_type")
+  size             Int                // File size in bytes
+  path             String             // Storage path
+  url              String?            // Public URL if available
+  type             DocumentType
+  status           DocumentStatus     @default(PENDING)
+  moduleType       ModuleType         @map("module_type")
+  moduleId         String?            @map("module_id")
+  tags             String[]           @default([])
+  description      String?
+  uploadedById     String?            @map("uploaded_by")
+  processedAt      DateTime?          @map("processed_at")
+  expiryDate       DateTime?          @map("expiry_date")
+  isArchived       Boolean            @default(false) @map("is_archived")
+  isDeleted        Boolean            @default(false) @map("is_deleted")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  metadata         Json?              // Additional metadata
+
+  // Relations
+  uploadedBy       User?              @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])
+  extractions      DocumentExtraction[]
+  versions         DocumentVersion[]
+
+  @@index([type])
+  @@index([moduleType, moduleId])
+  @@index([status])
+  @@index([uploadedById])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id          String   @id @default(uuid())
+  documentId  String   @map("document_id")
+  version     Int
+  name        String
+  path        String
+  size        Int
+  uploadedById String? @map("uploaded_by")
+  changes     String?  // Description of changes
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@map("document_versions")
+}
+
+model DocumentExtraction {
+  id              String           @id @default(uuid())
+  documentId      String           @map("document_id")
+  extractionType  ExtractionType   @map("extraction_type")
+  provider        String           // AI provider used
+  model           String           // AI model used
+  rawResponse     Json?            @map("raw_response")
+  extractedData   Json             @map("extracted_data")
+  confidence      Decimal?         @db.Decimal(5, 2)
+  status          ExtractionStatus @default(PENDING)
+  errorMessage    String?          @map("error_message")
+  processingTime  Int?             @map("processing_time_ms")
+  reviewedById    String?          @map("reviewed_by")
+  reviewedAt      DateTime?        @map("reviewed_at")
+  isApproved      Boolean          @default(false) @map("is_approved")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  document        Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reviewedBy      User?            @relation("ExtractionReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([documentId])
+  @@index([status])
+  @@map("document_extractions")
+}
+
+model AIUsageLog {
+  id              String   @id @default(uuid())
+  provider        String
+  model           String
+  endpoint        String
+  promptTokens    Int      @map("prompt_tokens")
+  completionTokens Int     @map("completion_tokens")
+  totalTokens     Int      @map("total_tokens")
+  latencyMs       Int      @map("latency_ms")
+  success         Boolean
+  errorMessage    String?  @map("error_message")
+  taskType        String?  @map("task_type")
+  userId          String?  @map("user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([provider])
+  @@index([createdAt])
+  @@map("ai_usage_logs")
+}
+
+enum DocumentType {
+  TENDER_DOCUMENT
+  TENDER_SPECS
+  TENDER_BOQ
+  TENDER_COMMERCIAL
+  INVOICE
+  RECEIPT
+  EXPENSE_RECEIPT
+  DELIVERY_NOTE
+  PURCHASE_ORDER
+  CONTRACT
+  CERTIFICATE
+  LICENSE
+  WARRANTY
+  PRODUCT_DATASHEET
+  QUOTATION
+  PROPOSAL
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  ARCHIVED
+}
+
+enum ModuleType {
+  TENDER
+  BUDGET
+  EXPENSE
+  INVOICE
+  DELIVERY
+  INVENTORY
+  CUSTOMER
+  PRODUCT
+  GENERAL
+}
+
+enum ExtractionType {
+  TENDER_EXTRACTION
+  INVOICE_EXTRACTION
+  EXPENSE_EXTRACTION
+  DELIVERY_EXTRACTION
+  PRODUCT_EXTRACTION
+  OCR_TEXT
+  SUMMARIZATION
+  TRANSLATION
+}
+
+enum ExtractionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  NEEDS_REVIEW
 }
