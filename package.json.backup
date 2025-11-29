@@ -12,16 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "test": "jest",
-    "test:watch": "jest --watch",
-    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "npm run build && electron-builder",
-    "electron:builder": "electron-builder",
-    "electron:builder:mac": "electron-builder --mac",
-    "db:local:generate": "prisma generate --schema=prisma/schema.local.prisma",
-    "db:local:push": "prisma db push --schema=prisma/schema.local.prisma",
-    "db:local:studio": "prisma studio --schema=prisma/schema.local.prisma",
-    "db:local:reset": "prisma db push --schema=prisma/schema.local.prisma --force-reset",
-    "db:generate:all": "npm run db:generate && npm run db:local:generate"
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -86,13 +77,5 @@
     "tsx": "^4.19.4",
     "typescript": "^5",
     "wait-on": "^9.0.3"
-  },
-  "main": "electron/main.js",
-  "author": {
-    "name": "Beshara Group",
-    "email": "m.beshara@besharagroup.com"
-  },
-  "build": {
-    "extends": "electron-builder.json"
   }
 }

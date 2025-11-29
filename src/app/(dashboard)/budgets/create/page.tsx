@@ -49,7 +49,7 @@ const budgetSchema = z.object({
   totalAmount: z.number().min(1000, 'Total amount must be at least 1,000 KWD'),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
-  currency: z.string().default('KWD'),
+  currency: z.string().optional().default('KWD'),
   notes: z.string().optional(),
   categories: z.array(
     z.object({
@@ -110,7 +110,7 @@ export default function CreateBudgetPage() {
     setValue,
     formState: { errors },
   } = useForm<BudgetFormData>({
-    resolver: zodResolver(budgetSchema),
+    resolver: zodResolver(budgetSchema) as any,
     defaultValues: {
       name: '',
       fiscalYear: new Date().getFullYear(),
