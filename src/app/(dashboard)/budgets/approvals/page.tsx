@@ -347,7 +347,7 @@ export default function ApprovalsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={urgencyColors[item.urgency]}>{item.urgency}</Badge>
+                        <Badge className={urgencyColors[item.urgency as UrgencyLevel]}>{item.urgency}</Badge>
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
                         {formatDate(item.submittedDate)}
