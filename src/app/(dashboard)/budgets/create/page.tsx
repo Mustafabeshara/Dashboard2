@@ -49,7 +49,7 @@ const budgetSchema = z.object({
   totalAmount: z.number().min(1000, 'Total amount must be at least 1,000 KWD'),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
-  currency: z.string().default('KWD'),
+  currency: z.string(),
   notes: z.string().optional(),
   categories: z.array(
     z.object({
@@ -59,7 +59,7 @@ const budgetSchema = z.object({
       type: z.enum(['REVENUE', 'EXPENSE', 'CAPITAL']),
       allocatedAmount: z.number().min(0),
       parentId: z.string().optional(),
-      varianceThreshold: z.number().min(0).max(100).default(10),
+      varianceThreshold: z.number().min(0).max(100),
       requiresApprovalOver: z.number().optional(),
       notes: z.string().optional(),
     })

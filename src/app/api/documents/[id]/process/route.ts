@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extractFromDocument, summarize, translateArabicToEnglish } from '@/lib/ai/ai-service-manager'
-import { ExtractionType, ExtractionStatus } from '@prisma/client'
+import { ExtractionType, ExtractionStatus, Prisma } from '@prisma/client'
 import { readFile } from 'fs/promises'
 
 // Map document types to extraction types
@@ -143,7 +143,7 @@ export async function POST(
         data: {
           provider: 'ai-service',
           model: 'fallback-chain',
-          extractedData: result.data,
+          extractedData: result.data as Prisma.InputJsonValue,
           status: 'COMPLETED',
           processingTime,
         },
