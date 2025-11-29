@@ -9,7 +9,6 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start -p $PORT",
-    "postinstall": "prisma generate",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
     "db:generate": "prisma generate",
