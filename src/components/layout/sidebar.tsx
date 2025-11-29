@@ -27,6 +27,8 @@ import {
   ShoppingCart,
   Bell,
   CheckCircle,
+  FolderOpen,
+  Sparkles,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -106,6 +108,15 @@ const navItems: NavItem[] = [
     href: '/invoices',
     icon: <ClipboardList className="h-5 w-5" />,
     roles: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'FINANCE', 'SALES'],
+  },
+  {
+    title: 'Documents',
+    href: '/documents',
+    icon: <FolderOpen className="h-5 w-5" />,
+    children: [
+      { title: 'Document Hub', href: '/documents' },
+      { title: 'AI Processing', href: '/documents/ai', roles: ['ADMIN', 'CEO', 'CFO', 'MANAGER'] },
+    ],
   },
   {
     title: 'Suppliers',
