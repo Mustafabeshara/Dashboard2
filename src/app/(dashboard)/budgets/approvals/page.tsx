@@ -46,6 +46,8 @@ import {
 import { formatCurrency, formatDate, getApprovalLevel } from '@/lib/utils'
 import type { TransactionStatus } from '@/types'
 
+type UrgencyLevel = 'HIGH' | 'MEDIUM' | 'LOW'
+
 // Sample pending approvals
 const pendingApprovals = [
   {
@@ -58,7 +60,7 @@ const pendingApprovals = [
     budget: 'FY 2024 Master Budget',
     budgetAvailable: 65000,
     submittedDate: new Date('2024-01-15'),
-    urgency: 'HIGH',
+    urgency: 'HIGH' as UrgencyLevel,
     attachments: 2,
     notes: 'Required for Q1 product launch campaign',
     approvalLevel: 2,
@@ -74,7 +76,7 @@ const pendingApprovals = [
     budget: 'Sales Department Budget',
     budgetAvailable: 160000,
     submittedDate: new Date('2024-01-14'),
-    urgency: 'MEDIUM',
+    urgency: 'MEDIUM' as UrgencyLevel,
     attachments: 5,
     notes: 'Required for MOH tender submission',
     approvalLevel: 3,
@@ -90,7 +92,7 @@ const pendingApprovals = [
     budget: 'Operations Department Budget',
     budgetAvailable: 45000,
     submittedDate: new Date('2024-01-13'),
-    urgency: 'LOW',
+    urgency: 'LOW' as UrgencyLevel,
     attachments: 1,
     notes: 'Scheduled maintenance for delivery fleet',
     approvalLevel: 1,
@@ -106,7 +108,7 @@ const pendingApprovals = [
     budget: 'FY 2024 Master Budget',
     budgetAvailable: 65000,
     submittedDate: new Date('2024-01-12'),
-    urgency: 'HIGH',
+    urgency: 'HIGH' as UrgencyLevel,
     attachments: 3,
     notes: 'Annual trade show participation - booth and materials',
     approvalLevel: 2,
@@ -122,7 +124,7 @@ const pendingApprovals = [
     budget: 'Administration Budget',
     budgetAvailable: 25000,
     submittedDate: new Date('2024-01-11'),
-    urgency: 'LOW',
+    urgency: 'LOW' as UrgencyLevel,
     attachments: 1,
     notes: 'Desks and chairs for 5 new employees',
     approvalLevel: 1,
@@ -130,7 +132,7 @@ const pendingApprovals = [
   },
 ]
 
-const urgencyColors = {
+const urgencyColors: Record<UrgencyLevel, string> = {
   HIGH: 'bg-red-100 text-red-700 border-red-200',
   MEDIUM: 'bg-yellow-100 text-yellow-700 border-yellow-200',
   LOW: 'bg-green-100 text-green-700 border-green-200',
