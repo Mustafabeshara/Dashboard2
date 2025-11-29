@@ -170,7 +170,7 @@ export function Sidebar({ pendingApprovals = 0, alerts = 0 }: SidebarProps) {
     return item.roles.includes(userRole)
   }
 
-  const isChildVisible = (child: NavItem['children'][0]) => {
+  const isChildVisible = (child: NonNullable<NavItem['children']>[number]) => {
     if (!child.roles) return true
     if (!userRole) return false
     return child.roles.includes(userRole)
