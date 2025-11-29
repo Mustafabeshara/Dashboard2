@@ -14,12 +14,9 @@ const nextConfig: NextConfig = {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
   },
 
-  // Ignore TypeScript/ESLint errors during build (for faster deployment)
+  // Ignore TypeScript errors during build (for faster deployment)
   typescript: {
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
 };
 
