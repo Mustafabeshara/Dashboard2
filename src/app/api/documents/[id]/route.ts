@@ -9,7 +9,7 @@ import { unlink } from 'fs/promises'
 
 // GET /api/documents/[id] - Get document details
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params

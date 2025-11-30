@@ -6,9 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extractTenderFromDocument, validateTenderExtraction, needsHumanReview } from '@/lib/ai/tender-extraction'
-import { ExtractionType, ExtractionStatus } from '@prisma/client'
+import { ExtractionType } from '@prisma/client'
 import { ocr } from '@/lib/ocr'
-import { audit, AuditAction } from '@/lib/audit'
+import { audit } from '@/lib/audit'
 import { WebSocketHelpers } from '@/lib/websocket'
 import { email, EmailTemplate } from '@/lib/email'
 
@@ -26,7 +26,7 @@ const DOCUMENT_TO_EXTRACTION_TYPE: Record<string, ExtractionType> = {
 }
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
@@ -244,7 +244,7 @@ export async function POST(
 
 // GET /api/documents/[id]/process - Get extraction status
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { storagePut, generateFileKey, sanitizeFilename } from '@/lib/storage'
+import { storagePut, generateFileKey } from '@/lib/storage'
 import { DocumentType, ModuleType } from '@prisma/client'
 import { v4 as uuidv4 } from 'uuid'
 
