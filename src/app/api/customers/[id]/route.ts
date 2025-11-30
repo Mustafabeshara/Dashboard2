@@ -10,7 +10,7 @@ import { authOptions } from '@/lib/auth'
 
 // GET /api/customers/[id] - Get customer details
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -180,7 +180,7 @@ export async function PATCH(
 
 // DELETE /api/customers/[id] - Soft delete customer
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
