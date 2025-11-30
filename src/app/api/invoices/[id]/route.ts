@@ -4,22 +4,18 @@ import { authOptions } from '@/lib/auth'; // Assuming authOptions is defined her
 import { prisma } from '@/lib/prisma'; // Assuming prisma client is defined here
 import { Prisma } from '@prisma/client';
 
-// Define the structure for the dynamic route parameters
-interface Context {
-  params: {
-    id: string;
-  };
-}
-
 // --- GET (Detail) ---
-export async function GET(request: NextRequest, context: Context) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return new NextResponse(JSON.stringify({ message: 'Unauthorized' }), { status: 401 });
     }
 
-    const { id } = context.params;
+    const { id } = await params;
 
     const invoice = await prisma.invoice.findUnique({
       where: {
@@ -46,14 +42,17 @@ export async function GET(request: NextRequest, context: Context) {
 }
 
 // --- PATCH (Update) ---
-export async function PATCH(request: NextRequest, context: Context) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return new NextResponse(JSON.stringify({ message: 'Unauthorized' }), { status: 401 });
     }
 
-    const { id } = context.params;
+    const { id } = await params;
     const body = await request.json();
 
     // Prevent updating soft-deleted records
@@ -92,14 +91,17 @@ export async function PATCH(request: NextRequest, context: Context) {
 }
 
 // --- DELETE (Soft-Delete) ---
-export async function DELETE(request: NextRequest, context: Context) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return new NextResponse(JSON.stringify({ message: 'Unauthorized' }), { status: 401 });
     }
 
-    const { id } = context.params;
+    const { id } = await params;
 
     // Perform a soft delete by setting the deletedAt timestamp
     const deletedInvoice = await prisma.invoice.update({
