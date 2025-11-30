@@ -36,11 +36,10 @@ class AuditManager {
           action: entry.action,
           entityType: entry.entityType,
           entityId: entry.entityId,
-          changes: entry.changes ? JSON.stringify(entry.changes) : null,
-          metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
+          oldValues: entry.changes?.before || null,
+          newValues: entry.changes?.after || null,
           ipAddress: entry.ipAddress,
           userAgent: entry.userAgent,
-          timestamp: new Date(),
         },
       })
 
@@ -153,7 +152,7 @@ class AuditManager {
           entityId,
         },
         orderBy: {
-          timestamp: 'desc',
+          createdAt: 'desc',
         },
         take: limit,
         include: {
@@ -185,13 +184,15 @@ class AuditManager {
       return await prisma.auditLog.findMany({
         where: {
           userId,
-          timestamp: {
-            gte: startDate,
-            lte: endDate,
-          },
+          ...(startDate || endDate ? {
+            createdAt: {
+              ...(startDate ? { gte: startDate } : {}),
+              ...(endDate ? { lte: endDate } : {}),
+            },
+          } : {}),
         },
         orderBy: {
-          timestamp: 'desc',
+          createdAt: 'desc',
         },
         take: limit,
       })

@@ -4,7 +4,7 @@
  */
 
 import { NextRequest } from 'next/server'
-import { WebSocketServer } from '@/lib/websocket'
+import { websocket } from '@/lib/websocket'
 
 export async function GET(request: NextRequest) {
   // Check if this is a WebSocket upgrade request
@@ -15,13 +15,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Initialize WebSocket server
-    const server = WebSocketServer.getInstance()
-    
-    // Handle the upgrade
-    const { socket, response } = await server.handleUpgrade(request)
-    
-    return response
+    // WebSocket upgrade handling
+    // Note: Next.js API routes don't support WebSocket upgrades directly
+    // Use a separate WebSocket server or a service like Pusher/Ably for production
+    return new Response(
+      JSON.stringify({
+        error: 'WebSocket connections not supported in this environment',
+        suggestion: 'Use polling or server-sent events instead',
+      }),
+      { status: 501, headers: { 'Content-Type': 'application/json' } }
+    )
   } catch (error) {
     console.error('WebSocket upgrade error:', error)
     return new Response('WebSocket upgrade failed', { status: 500 })

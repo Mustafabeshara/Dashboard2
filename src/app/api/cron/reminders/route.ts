@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
           (now.getTime() - invoice.dueDate!.getTime()) / (24 * 60 * 60 * 1000)
         )
 
-        await email.sendTemplate(EmailTemplate.INVOICE_OVERDUE, invoice.customer.email, {
+        await email.sendTemplate(EmailTemplate.INVOICE_DUE_REMINDER, invoice.customer.email, {
           invoiceNumber: invoice.invoiceNumber,
           customerName: invoice.customer.name,
           amount: invoice.totalAmount,
