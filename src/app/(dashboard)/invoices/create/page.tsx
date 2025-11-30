@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,7 @@ interface LineItem {
   unitPrice: number
 }
 
-export default function CreateInvoicePage() {
+function CreateInvoiceForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const customerId = searchParams.get('customerId')
@@ -345,5 +345,13 @@ export default function CreateInvoicePage() {
         </div>
       </form>
     </div>
+  )
+}
+
+export default function CreateInvoicePage() {
+  return (
+    <Suspense fallback={<div className="container mx-auto py-6 max-w-5xl">Loading...</div>}>
+      <CreateInvoiceForm />
+    </Suspense>
   )
 }
