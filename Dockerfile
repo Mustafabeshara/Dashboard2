@@ -29,9 +29,6 @@ ENV NODE_ENV=production
 # Build the application
 RUN npm run build
 
-# Verify standalone output exists
-RUN ls -la .next/standalone/ && ls -la .next/static/
-
 # Production image
 FROM base AS runner
 WORKDIR /app
@@ -42,10 +39,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built application
+# Copy public folder
 COPY --from=builder /app/public ./public
+
+# Copy standalone build
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Copy prisma schema and generated client
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 USER nextjs
 
