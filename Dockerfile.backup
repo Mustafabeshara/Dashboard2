@@ -10,10 +10,10 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 
-# Install dependencies (this includes prisma@6.8.2)
+# Install dependencies
 RUN npm ci
 
-# Generate Prisma client using local version
+# Generate Prisma client
 RUN npm run db:generate
 
 # Rebuild the source code only when needed
@@ -53,10 +53,10 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 USER nextjs
 
-EXPOSE 3000
+# Railway uses dynamic PORT - expose common ones
+EXPOSE 3000 8080
 
-ENV PORT=3000
+# Let Railway set PORT via environment variable
 ENV HOSTNAME="0.0.0.0"
 
-# Start without running migrations (they should be run separately)
 CMD ["node", "server.js"]
