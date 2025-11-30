@@ -1,5 +1,6 @@
+# Use Node.js 20 for Next.js 16 compatibility
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm"]
+nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = ["npm ci"]
@@ -9,3 +10,7 @@ cmds = ["npx prisma generate", "npm run build"]
 
 [start]
 cmd = "npx prisma migrate deploy && npm start"
+
+[variables]
+NODE_ENV = "production"
+NIXPACKS_NODE_VERSION = "20"
