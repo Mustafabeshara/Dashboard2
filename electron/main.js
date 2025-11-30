@@ -216,7 +216,7 @@ function createMainWindow() {
   });
   
   // Use the actual server URL that was detected
-  const url = !app.isPackaged ? actualServerUrl + "/login" : `file://${path.join(__dirname, '../out/index.html')}`;
+  const url = !app.isPackaged ? actualServerUrl + "/dashboard" : `file://${path.join(__dirname, '../out/index.html')}`;
   log(`Loading: ${url}`);
   mainWindow.loadURL(url);
   
