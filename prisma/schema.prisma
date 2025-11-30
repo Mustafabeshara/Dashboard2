@@ -724,3 +724,41 @@ enum ExtractionStatus {
   FAILED
   NEEDS_REVIEW
 }
+
+model Supplier {
+  id                 String    @id @default(uuid())
+  name               String
+  code               String?   @unique
+  category           String?   // e.g., Medical Equipment, Pharmaceuticals
+  contactPerson      String?   @map("contact_person")
+  email              String?
+  phone              String?
+  address            String?
+  city               String?
+  country            String    @default("Kuwait")
+  website            String?
+  taxId              String?   @map("tax_id")
+  registrationNumber String?   @map("registration_number")
+  paymentTerms       String?   @map("payment_terms")
+  leadTime           Int?      @map("lead_time") // Days
+  rating             Decimal?  @db.Decimal(3, 2) // 0.00 to 5.00
+  notes              String?   @db.Text
+  isActive           Boolean   @default(true) @map("is_active")
+  isDeleted          Boolean   @default(false) @map("is_deleted")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@map("suppliers")
+}
+
+enum SupplierCategory {
+  MEDICAL_EQUIPMENT
+  PHARMACEUTICALS
+  LABORATORY
+  IMAGING
+  SURGICAL_INSTRUMENTS
+  CONSUMABLES
+  IT_EQUIPMENT
+  FURNITURE
+  OTHER
+}

@@ -1,5 +1,18 @@
 'use client'
-import Link from 'next/link'
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { FileText } from 'lucide-react'
+
 export default function ReportsPage() {
-  return (<div className="p-8"><div className="max-w-2xl mx-auto text-center"><div className="text-6xl mb-4">📊</div><h1 className="text-3xl font-bold text-gray-800 mb-4">Reports</h1><p className="text-gray-600 mb-8">This module is under development.</p><Link href="/dashboard" className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">← Back to Dashboard</Link></div></div>)
+  return (
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold mb-6">Reports</h1>
+      <p className="text-muted-foreground">Generate business insights and analytics</p>
+      <div className="mt-8 text-center py-12">
+        <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+        <p className="mt-4">Reports module - Full implementation in progress</p>
+      </div>
+    </div>
+  )
 }
