@@ -10,11 +10,11 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 
-# Install dependencies
+# Install dependencies (this includes prisma@6.8.2)
 RUN npm ci
 
-# Generate Prisma client
-RUN npx prisma generate
+# Generate Prisma client using local version
+RUN npm run db:generate
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -58,4 +58,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Start without running migrations (they should be run separately)
+CMD ["node", "server.js"]
