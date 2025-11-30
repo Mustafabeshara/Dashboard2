@@ -47,7 +47,7 @@ class RateLimiter {
     }
     
     // Use IP address as default identifier
-    const ip = request.ip || request.headers.get('x-forwarded-for') || 'unknown'
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     const path = request.nextUrl.pathname
     return `${ip}:${path}`
   }

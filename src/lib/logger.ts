@@ -120,7 +120,7 @@ class Logger {
         method: request.method,
         path: request.nextUrl.pathname,
         query: Object.fromEntries(request.nextUrl.searchParams),
-        ip: request.ip || request.headers.get('x-forwarded-for'),
+        ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         userAgent: request.headers.get('user-agent'),
         ...meta,
       },
@@ -144,7 +144,7 @@ class Logger {
       context: {
         method: request.method,
         path: request.nextUrl.pathname,
-        ip: request.ip || request.headers.get('x-forwarded-for'),
+        ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         ...meta,
       },
     })
@@ -210,7 +210,7 @@ export function createRequestLogger(request: NextRequest, userId?: string) {
   requestLogger.setContext({
     requestId,
     userId,
-    ip: request.ip || request.headers.get('x-forwarded-for') || 'unknown',
+    ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
     userAgent: request.headers.get('user-agent') || 'unknown',
     path: request.nextUrl.pathname,
     method: request.method,

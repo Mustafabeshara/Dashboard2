@@ -216,7 +216,17 @@ export const createBudgetSchema = z.object({
   }
 )
 
-export const updateBudgetSchema = createBudgetSchema.partial().extend({
+export const updateBudgetSchema = z.object({
+  name: z.string().min(3).max(200).optional(),
+  fiscalYear: z.number().int().min(2000).max(2100).optional(),
+  type: z.enum(['OPERATIONAL', 'CAPITAL', 'PROJECT']).optional(),
+  department: z.string().max(100).optional(),
+  currency: z.string().length(3).optional(),
+  totalAmount: z.number().positive().optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  notes: z.string().max(2000).optional(),
+  categories: z.array(createBudgetCategorySchema).optional(),
   status: z.enum(['DRAFT', 'ACTIVE', 'CLOSED', 'ARCHIVED']).optional(),
 })
 

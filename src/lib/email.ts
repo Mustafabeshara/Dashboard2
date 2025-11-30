@@ -279,9 +279,10 @@ class EmailManager {
           (new Date(tender.submissionDeadline!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
         )
 
-        await this.sendTemplate(
-          EmailTemplate.TENDER_DEADLINE_REMINDER,
-          tender.createdBy.email,
+        if (tender.createdBy?.email) {
+          await this.sendTemplate(
+            EmailTemplate.TENDER_DEADLINE_REMINDER,
+            tender.createdBy.email,
           {
             id: tender.id,
             tenderNumber: tender.tenderNumber,
@@ -289,7 +290,8 @@ class EmailManager {
             submissionDeadline: tender.submissionDeadline,
             daysRemaining,
           }
-        )
+          )
+        }
       }
 
       logger.info(`Sent ${tenders.length} tender deadline reminders`)
@@ -325,9 +327,10 @@ class EmailManager {
           (new Date(invoice.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
         )
 
-        await this.sendTemplate(
-          EmailTemplate.INVOICE_DUE_REMINDER,
-          invoice.createdBy.email,
+        if (invoice.createdBy?.email) {
+          await this.sendTemplate(
+            EmailTemplate.INVOICE_DUE_REMINDER,
+            invoice.createdBy.email,
           {
             id: invoice.id,
             invoiceNumber: invoice.invoiceNumber,
@@ -337,7 +340,8 @@ class EmailManager {
             dueDate: invoice.dueDate,
             daysUntilDue,
           }
-        )
+          )
+        }
       }
 
       logger.info(`Sent ${invoices.length} invoice due reminders`)
