@@ -1,13 +1,16 @@
 /**
  * Document Processing API
- * Triggers AI extraction on uploaded documents
+ * Enhanced with direct PDF processing via Gemini file_url
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { extractFromDocument, summarize, translateArabicToEnglish } from '@/lib/ai/ai-service-manager'
+import { extractTenderFromDocument, validateTenderExtraction, needsHumanReview } from '@/lib/ai/tender-extraction'
 import { ExtractionType, ExtractionStatus } from '@prisma/client'
-import { readFile } from 'fs/promises'
+import { ocr } from '@/lib/ocr'
+import { audit, AuditAction } from '@/lib/audit'
+import { WebSocketHelpers } from '@/lib/websocket'
+import { email, EmailTemplate } from '@/lib/email'
 
 // Map document types to extraction types
 const DOCUMENT_TO_EXTRACTION_TYPE: Record<string, ExtractionType> = {
@@ -20,44 +23,6 @@ const DOCUMENT_TO_EXTRACTION_TYPE: Record<string, ExtractionType> = {
   RECEIPT: 'EXPENSE_EXTRACTION',
   DELIVERY_NOTE: 'DELIVERY_EXTRACTION',
   PRODUCT_DATASHEET: 'PRODUCT_EXTRACTION',
-}
-
-// Extract text from document (placeholder - in production use proper PDF/OCR libraries)
-async function extractTextFromDocument(
-  filePath: string,
-  mimeType: string
-): Promise<{ text: string; images: string[] }> {
-  const images: string[] = []
-
-  // For images, convert to base64
-  if (mimeType.startsWith('image/')) {
-    const buffer = await readFile(filePath)
-    const base64 = buffer.toString('base64')
-    images.push(`data:${mimeType};base64,${base64}`)
-    return { text: '', images }
-  }
-
-  // For text files, read directly
-  if (mimeType === 'text/plain' || mimeType === 'text/csv') {
-    const buffer = await readFile(filePath)
-    return { text: buffer.toString('utf-8'), images }
-  }
-
-  // For PDFs and other documents, we'd use a PDF parsing library
-  // For now, return placeholder (in production: use pdf-parse, tesseract, etc.)
-  if (mimeType === 'application/pdf') {
-    // In production: Use pdf-parse or similar library
-    // const pdfParse = require('pdf-parse')
-    // const dataBuffer = await readFile(filePath)
-    // const data = await pdfParse(dataBuffer)
-    // return { text: data.text, images: [] }
-    return {
-      text: '[PDF text extraction requires pdf-parse library - install with npm install pdf-parse]',
-      images
-    }
-  }
-
-  return { text: '', images }
 }
 
 export async function POST(
@@ -77,6 +42,14 @@ export async function POST(
       return NextResponse.json(
         { error: 'Document not found' },
         { status: 404 }
+      )
+    }
+
+    // Check if document has a URL (required for AI processing)
+    if (!document.url) {
+      return NextResponse.json(
+        { error: 'Document URL not available. Please ensure document is uploaded to S3.' },
+        { status: 400 }
       )
     }
 
@@ -119,62 +92,17 @@ export async function POST(
       },
     })
 
-    // Extract text/images from document
-    const { text, images } = await extractTextFromDocument(
-      document.path,
-      document.mimeType
-    )
-
-    // Determine document type for AI extraction
-    let docType: 'tender' | 'invoice' | 'expense' | 'delivery' = 'tender'
-    if (extractionType === 'INVOICE_EXTRACTION') docType = 'invoice'
-    else if (extractionType === 'EXPENSE_EXTRACTION') docType = 'expense'
-    else if (extractionType === 'DELIVERY_EXTRACTION') docType = 'delivery'
-
-    // Run AI extraction
-    const result = await extractFromDocument(docType, text, images)
-
-    const processingTime = Date.now() - startTime
-
-    if (result.success && result.data) {
-      // Update extraction with results
-      const updatedExtraction = await prisma.documentExtraction.update({
-        where: { id: extraction.id },
-        data: {
-          provider: 'ai-service',
-          model: 'fallback-chain',
-          extractedData: result.data as any,
-          status: 'COMPLETED',
-          processingTime,
-        },
-      })
-
-      // Update document status
-      await prisma.document.update({
-        where: { id },
-        data: {
-          status: 'PROCESSED',
-          processedAt: new Date(),
-        },
-      })
-
-      return NextResponse.json({
-        success: true,
-        extraction: updatedExtraction,
-        processingTime,
-      })
-    } else {
-      // Update extraction with error
+    // Only tender extraction is implemented with new system
+    // Other document types will be added later
+    if (extractionType !== 'TENDER_EXTRACTION') {
       await prisma.documentExtraction.update({
         where: { id: extraction.id },
         data: {
           status: 'FAILED',
-          errorMessage: result.error || 'Unknown error',
-          processingTime,
+          errorMessage: `Extraction type ${extractionType} not yet implemented with new system`,
         },
       })
 
-      // Update document status
       await prisma.document.update({
         where: { id },
         data: { status: 'FAILED' },
@@ -183,12 +111,121 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: result.error || 'Extraction failed',
-          processingTime,
+          error: `Extraction type ${extractionType} not yet implemented`,
+        },
+        { status: 501 }
+      )
+    }
+
+    // Check if document needs OCR (scanned image)
+    let documentUrl = document.url
+    if (ocr.isScannedDocument(document.mimeType)) {
+      try {
+        console.log(`[ProcessDocument] Document appears to be scanned, running OCR...`)
+        const ocrResult = await ocr.extractText(document.url)
+        console.log(`[ProcessDocument] OCR extracted ${ocrResult.text.length} characters with ${(ocrResult.confidence * 100).toFixed(1)}% confidence`)
+        // OCR result can be used if needed, but Gemini can also process images directly
+      } catch (error) {
+        console.warn('[ProcessDocument] OCR failed, using direct file processing:', error)
+      }
+    }
+
+    // Extract tender data using new system
+    console.log(`[ProcessDocument] Starting tender extraction for document ${id}`)
+    
+    let extractedData
+    try {
+      extractedData = await extractTenderFromDocument(documentUrl, document.mimeType)
+    } catch (extractError: any) {
+      console.error(`[ProcessDocument] Extraction failed:`, extractError)
+      
+      await prisma.documentExtraction.update({
+        where: { id: extraction.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: extractError.message || 'Extraction failed',
+          processingTime: Date.now() - startTime,
+        },
+      })
+
+      await prisma.document.update({
+        where: { id },
+        data: { status: 'FAILED' },
+      })
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: extractError.message || 'Extraction failed',
+          processingTime: Date.now() - startTime,
         },
         { status: 500 }
       )
     }
+
+    // Validate extraction
+    const validationErrors = validateTenderExtraction(extractedData)
+    const requiresReview = needsHumanReview(extractedData)
+
+    const processingTime = Date.now() - startTime
+
+    // Calculate overall confidence
+    const confidence = extractedData.confidence?.overall || 0
+
+    // Update extraction with results
+    const updatedExtraction = await prisma.documentExtraction.update({
+      where: { id: extraction.id },
+      data: {
+        provider: 'gemini', // Primary provider for PDFs
+        model: 'gemini-2.5-flash',
+        extractedData: extractedData as any,
+        confidence,
+        status: 'COMPLETED',
+        processingTime,
+        isApproved: !requiresReview && validationErrors.length === 0,
+      },
+    })
+
+    // Update document status
+    await prisma.document.update({
+      where: { id },
+      data: {
+        status: 'PROCESSED',
+        processedAt: new Date(),
+      },
+    })
+
+    console.log(`[ProcessDocument] Successfully processed document ${id}`)
+    console.log(`[ProcessDocument] Confidence: ${confidence}, Requires Review: ${requiresReview}`)
+    console.log(`[ProcessDocument] Validation Errors: ${validationErrors.length}`)
+
+    // Audit trail
+    await audit.logUpdate('Document', id, { status: 'PROCESSING' }, { status: 'PROCESSED' })
+
+    // WebSocket notification
+    WebSocketHelpers.notifyDocumentProcessed({ id, fileName: document.name, status: 'PROCESSED' }, document.uploadedById || 'system')
+
+    // Email notification if user exists
+    const user = document.uploadedById ? await prisma.user.findUnique({ where: { id: document.uploadedById } }) : null
+    if (user?.email) {
+      await email.sendTemplate(EmailTemplate.DOCUMENT_PROCESSED, user.email, {
+        documentName: document.name,
+        documentType: document.type,
+        confidence: Math.round(confidence * 100),
+        requiresReview,
+        validationErrors: validationErrors.length,
+      }).catch(err => console.error('Failed to send email:', err))
+    }
+
+    return NextResponse.json({
+      success: true,
+      extraction: updatedExtraction,
+      extractedData,
+      confidence,
+      requiresReview,
+      validationErrors,
+      processingTime,
+    })
   } catch (error) {
     console.error('Error processing document:', error)
 
@@ -205,23 +242,19 @@ export async function POST(
   }
 }
 
-// POST /api/documents/[id]/process/summarize - Generate summary
-export async function PUT(
+// GET /api/documents/[id]/process - Get extraction status
+export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
 
   try {
-    const { maxLength = 200 } = await request.json()
-
     const document = await prisma.document.findUnique({
       where: { id },
       include: {
         extractions: {
-          where: { status: 'COMPLETED' },
           orderBy: { createdAt: 'desc' },
-          take: 1,
         },
       },
     })
@@ -233,104 +266,15 @@ export async function PUT(
       )
     }
 
-    // Get text content
-    const { text } = await extractTextFromDocument(document.path, document.mimeType)
-
-    // Generate summary
-    const result = await summarize(text, maxLength)
-
-    if (result.success) {
-      // Save summary as extraction
-      const extraction = await prisma.documentExtraction.create({
-        data: {
-          documentId: id,
-          extractionType: 'SUMMARIZATION',
-          provider: result.provider,
-          model: result.model,
-          extractedData: { summary: result.content },
-          status: 'COMPLETED',
-          processingTime: result.latency,
-        },
-      })
-
-      return NextResponse.json({
-        success: true,
-        summary: result.content,
-        extraction,
-      })
-    }
-
-    return NextResponse.json(
-      { error: result.error || 'Summarization failed' },
-      { status: 500 }
-    )
-  } catch (error) {
-    console.error('Error summarizing document:', error)
-    return NextResponse.json(
-      { error: 'Failed to summarize document' },
-      { status: 500 }
-    )
-  }
-}
-
-// PATCH /api/documents/[id]/process/translate - Translate Arabic to English
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params
-
-  try {
-    const document = await prisma.document.findUnique({
-      where: { id },
+    return NextResponse.json({
+      success: true,
+      document,
+      latestExtraction: document.extractions[0] || null,
     })
-
-    if (!document) {
-      return NextResponse.json(
-        { error: 'Document not found' },
-        { status: 404 }
-      )
-    }
-
-    // Get text content
-    const { text } = await extractTextFromDocument(document.path, document.mimeType)
-
-    // Translate Arabic text
-    const result = await translateArabicToEnglish(text)
-
-    if (result.success) {
-      // Save translation as extraction
-      const extraction = await prisma.documentExtraction.create({
-        data: {
-          documentId: id,
-          extractionType: 'TRANSLATION',
-          provider: result.provider,
-          model: result.model,
-          extractedData: {
-            originalLanguage: 'ar',
-            targetLanguage: 'en',
-            translation: result.content,
-          },
-          status: 'COMPLETED',
-          processingTime: result.latency,
-        },
-      })
-
-      return NextResponse.json({
-        success: true,
-        translation: result.content,
-        extraction,
-      })
-    }
-
-    return NextResponse.json(
-      { error: result.error || 'Translation failed' },
-      { status: 500 }
-    )
   } catch (error) {
-    console.error('Error translating document:', error)
+    console.error('Error getting extraction status:', error)
     return NextResponse.json(
-      { error: 'Failed to translate document' },
+      { error: 'Failed to get extraction status' },
       { status: 500 }
     )
   }

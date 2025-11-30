@@ -1,15 +1,25 @@
+/**
+ * Expenses List Page
+ */
 'use client'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Plus } from 'lucide-react'
 
 export default function ExpensesPage() {
   return (
-    <div className="p-8">
-      <div className="max-w-2xl mx-auto text-center">
-        <div className="text-6xl mb-4">💰</div>
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">Expenses</h1>
-        <p className="text-gray-600 mb-8">This module is under development and will be available soon.</p>
-        <Link href="/dashboard" className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">← Back to Dashboard</Link>
+    <div className="container mx-auto py-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Expenses</h1>
+        <Button asChild>
+          <Link href="/expenses/create">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Expense
+          </Link>
+        </Button>
       </div>
+      <p>Expenses module - Implementation in progress</p>
     </div>
   )
 }

@@ -1,12 +1,11 @@
 /**
  * Document Upload API
- * Handles file uploads with support for multiple file types
+ * Enhanced with S3 storage for production-ready file handling
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
 import { prisma } from '@/lib/prisma'
+import { storagePut, generateFileKey, sanitizeFilename } from '@/lib/storage'
 import { DocumentType, ModuleType } from '@prisma/client'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -131,28 +130,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate unique filename
-    const fileId = uuidv4()
-    const extension = file.name.split('.').pop() || ''
-    const sanitizedName = file.name
-      .replace(/[^a-zA-Z0-9.-]/g, '_')
-      .substring(0, 100)
-    const storageName = `${fileId}-${sanitizedName}`
+    // Validate uploaded by ID
+    if (!uploadedById) {
+      return NextResponse.json(
+        { error: 'User ID is required' },
+        { status: 400 }
+      )
+    }
 
-    // Create upload directory structure
-    const uploadDir = join(
-      process.cwd(),
-      'uploads',
-      moduleType.toLowerCase(),
-      new Date().toISOString().slice(0, 7) // YYYY-MM format for organization
-    )
-    await mkdir(uploadDir, { recursive: true })
-
-    // Write file to disk
-    const filePath = join(uploadDir, storageName)
+    // Read file data
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    await writeFile(filePath, buffer)
+
+    // Generate file key for S3
+    const fileKey = generateFileKey(
+      uploadedById,
+      file.name,
+      `documents/${moduleType.toLowerCase()}`
+    )
+
+    // Upload to S3
+    console.log(`[Upload] Uploading file to S3: ${fileKey}`)
+    const { url } = await storagePut(fileKey, buffer, file.type)
+    console.log(`[Upload] File uploaded successfully: ${url}`)
 
     // Infer document type if not provided
     const inferredType = documentType || inferDocumentType(file.name, file.type)
@@ -164,8 +164,8 @@ export async function POST(request: NextRequest) {
         originalName: file.name,
         mimeType: file.type,
         size: file.size,
-        path: filePath,
-        url: `/uploads/${moduleType.toLowerCase()}/${new Date().toISOString().slice(0, 7)}/${storageName}`,
+        path: fileKey, // Store S3 key as path
+        url, // Public S3 URL
         type: inferredType,
         moduleType,
         moduleId,
@@ -174,8 +174,9 @@ export async function POST(request: NextRequest) {
         uploadedById,
         status: 'PENDING',
         metadata: {
-          originalExtension: extension,
+          originalExtension: file.name.split('.').pop() || '',
           uploadTimestamp: new Date().toISOString(),
+          s3Key: fileKey,
         },
       },
       include: {
@@ -184,6 +185,8 @@ export async function POST(request: NextRequest) {
         },
       },
     })
+
+    console.log(`[Upload] Document record created: ${document.id}`)
 
     return NextResponse.json(
       {
@@ -200,4 +203,26 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+// GET /api/documents/upload - Get upload configuration
+export async function GET() {
+  return NextResponse.json({
+    maxFileSize: MAX_FILE_SIZE,
+    maxFileSizeMB: MAX_FILE_SIZE / 1024 / 1024,
+    allowedMimeTypes: ALLOWED_MIME_TYPES,
+    allowedExtensions: [
+      '.pdf',
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.webp',
+      '.doc',
+      '.docx',
+      '.xls',
+      '.xlsx',
+      '.txt',
+      '.csv',
+    ],
+  })
 }
