@@ -35,7 +35,7 @@ async function getExpenseById(id: string, userId: string) {
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -43,7 +43,8 @@ export async function GET(
       return ApiError("Unauthorized", 401);
     }
 
-    const expense = await getExpenseById(params.id, session.user.id);
+    const { id } = await params;
+    const expense = await getExpenseById(id, session.user.id);
 
     if (!expense) {
       return ApiError("Expense not found", 404);
@@ -63,7 +64,7 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -71,8 +72,10 @@ export async function PATCH(
       return ApiError("Unauthorized", 401);
     }
 
+    const { id } = await params;
+
     // 1. Check if expense exists and belongs to user
-    const existingExpense = await getExpenseById(params.id, session.user.id);
+    const existingExpense = await getExpenseById(id, session.user.id);
     if (!existingExpense) {
       return ApiError("Expense not found or unauthorized access", 404);
     }
@@ -89,7 +92,7 @@ export async function PATCH(
 
     // 4. Perform update
     const updatedExpense = await prisma.expense.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         createdBy: { select: { id: true, fullName: true } },
@@ -114,7 +117,7 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -122,15 +125,17 @@ export async function DELETE(
       return ApiError("Unauthorized", 401);
     }
 
+    const { id } = await params;
+
     // 1. Check if expense exists and belongs to user
-    const existingExpense = await getExpenseById(params.id, session.user.id);
+    const existingExpense = await getExpenseById(id, session.user.id);
     if (!existingExpense) {
       return ApiError("Expense not found or unauthorized access", 404);
     }
 
     // 2. Perform soft-delete
     await prisma.expense.update({
-      where: { id: params.id },
+      where: { id },
       data: { isDeleted: true },
     });
 
