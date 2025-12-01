@@ -11,6 +11,12 @@ const fs = require('fs');
 // Import database module
 const database = require('./database');
 
+// Handle running as root (required in some Linux environments)
+// This must be called before app.whenReady()
+if (process.platform === 'linux' && process.getuid && process.getuid() === 0) {
+  app.commandLine.appendSwitch('no-sandbox');
+}
+
 const CONFIG = {
   DEV_SERVER_URL: 'http://localhost:3000',
   WINDOW_WIDTH: 1400,
