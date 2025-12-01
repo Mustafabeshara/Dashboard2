@@ -114,6 +114,19 @@ function startNextServer() {
       
       if (!app.isPackaged) {
         const npmPath = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+        // Generate a stable default secret if not set (for development only)
+        // NextAuth requires at least 32 characters for the secret
+        // Use a fixed secret for development to avoid configuration errors
+        const defaultSecret = process.env.NEXTAUTH_SECRET || 'dev-secret-key-for-electron-app-development-only-change-in-production-min-32-chars';
+        const defaultUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        
+        // Set DATABASE_URL to the provided PostgreSQL connection string
+        // This is needed for Prisma Client initialization
+        // In Electron mode, the auth system can use either IPC (local DB) or this connection (cloud DB)
+        const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:XaaDNvfvVqfmgHzHPSrgcZCOAWYWSqkG@turntable.proxy.rlwy.net:59955/railway';
+        const localDbPath = database.getLocalDatabasePath();
+        const localDatabaseUrl = `file:${localDbPath}`;
+        
         nextServer = spawn(npmPath, ['run', 'dev'], {
           cwd: path.join(__dirname, '..'),
           stdio: ['pipe', 'pipe', 'pipe'],
@@ -121,7 +134,11 @@ function startNextServer() {
           env: { 
             ...process.env, 
             BROWSER: 'none',
-            LOCAL_DATABASE_URL: `file:${database.getLocalDatabasePath()}`,
+            // Set DATABASE_URL to the Railway PostgreSQL database
+            DATABASE_URL: databaseUrl,
+            LOCAL_DATABASE_URL: localDatabaseUrl,
+            NEXTAUTH_SECRET: defaultSecret,
+            NEXTAUTH_URL: defaultUrl,
           }
         });
         
@@ -221,9 +238,16 @@ function createMainWindow() {
   });
   
   // Use the actual server URL that was detected
-  const url = !app.isPackaged ? actualServerUrl + "/dashboard" : `file://${path.join(__dirname, '../out/index.html')}`;
+  // Load root path which redirects to /dashboard
+  const url = !app.isPackaged ? actualServerUrl + "/" : `file://${path.join(__dirname, '../out/index.html')}`;
   log(`Loading: ${url}`);
-  mainWindow.loadURL(url);
+  mainWindow.loadURL(url).catch((err) => {
+    log(`Failed to load URL: ${err.message}`, 'error');
+    // Fallback: try loading dashboard directly
+    mainWindow.loadURL(actualServerUrl + "/dashboard").catch((fallbackErr) => {
+      log(`Failed to load fallback URL: ${fallbackErr.message}`, 'error');
+    });
+  });
   
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
