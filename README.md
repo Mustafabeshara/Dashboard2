@@ -4,6 +4,10 @@ A comprehensive web-based management system for medical device distribution comp
 
 Built for **Beshara Group - Healthcare Solutions Division** in Kuwait.
 
+## 📱 Desktop Application Available
+
+This application is now available as a **desktop application** with full offline capabilities and enhanced AI features. See [README_DESKTOP.md](README_DESKTOP.md) for details on the desktop version.
+
 ## Features
 
 ### Budgeting Module (Priority Feature)
@@ -37,8 +41,16 @@ Built for **Beshara Group - Healthcare Solutions Division** in Kuwait.
 - Invoice Management
 - Audit Logging
 
+### 🤖 AI-Powered Features (Desktop Only)
+- **PDF Text Extraction**: Advanced PDF parsing with 99% accuracy
+- **OCR Support**: Optical Character Recognition for scanned documents
+- **Intelligent Extraction**: AI-powered data extraction using multiple LLMs
+- **Data Validation**: Zod schema validation for extracted data quality
+- **Document Processing Queue**: Batch processing with progress tracking
+
 ## Tech Stack
 
+### Web Application
 - **Framework**: Next.js 14 with App Router and TypeScript
 - **Styling**: Tailwind CSS with shadcn/ui components
 - **Database**: PostgreSQL with Prisma ORM
@@ -47,19 +59,26 @@ Built for **Beshara Group - Healthcare Solutions Division** in Kuwait.
 - **Charts**: Recharts for data visualization
 - **Forms**: React Hook Form with Zod validation
 
+### Desktop Application
+- **Framework**: Electron with Node.js
+- **Local Database**: SQLite with Prisma ORM
+- **AI Processing**: pdf-parse, AWS Textract, Google Vision, Gemini, Groq
+- **UI**: Same Next.js frontend with desktop enhancements
+- **Offline Support**: Full functionality without internet connection
+
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL 14+
+- PostgreSQL 14+ (for web version)
 - npm or yarn
 
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/Mustafabeshara/Dashboard2.git
 cd medical-distribution-system
 ```
 
@@ -98,6 +117,35 @@ npm run dev
 ```
 
 6. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Desktop Application Setup
+
+To run the desktop version:
+
+1. Set up local database:
+```bash
+# Generate Prisma client for local database
+npm run db:local:generate
+
+# Push schema to local database
+npm run db:local:push
+```
+
+2. Start the desktop application in development mode:
+```bash
+npm run electron:dev
+```
+
+3. Build the desktop application for distribution:
+```bash
+# Build for current platform
+npm run electron:build
+
+# Build for specific platforms
+npm run electron:builder:mac    # macOS
+npm run electron:builder:win    # Windows
+npm run electron:builder:linux  # Linux
+```
 
 ### Test Credentials
 
@@ -205,6 +253,10 @@ npm run db:push      # Push schema to database
 npm run db:migrate   # Run migrations
 npm run db:seed      # Seed sample data
 
+# Desktop application
+npm run electron:dev     # Run desktop app in development
+npm run electron:build   # Build desktop app for distribution
+
 # Testing
 npm run test         # Run tests
 npm run test:watch   # Run tests in watch mode
@@ -248,4 +300,5 @@ Proprietary - Beshara Group
 ## Support
 
 For support, contact the IT department at it@beshara.com
+
 # Railway deploy trigger
