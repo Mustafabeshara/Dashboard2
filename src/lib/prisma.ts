@@ -84,9 +84,38 @@ export async function getPrisma(): Promise<PrismaClient> {
 /**
  * Synchronous export for backward compatibility
  * Note: This will create the client but won't wait for connection
+ * In Electron mode, this client may not be used (IPC is used instead)
  */
-export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-})
+function getPrismaClientSync(): PrismaClient {
+  // Use the shared prismaInstance variable (declared at top of file)
+  if (prismaInstance) {
+    return prismaInstance
+  }
+
+  // Ensure DATABASE_URL is set to prevent Prisma initialization errors
+  // Use the Railway database URL if available, otherwise use a dummy
+  if (!process.env.DATABASE_URL) {
+    // Fallback to Railway database URL if not set
+    process.env.DATABASE_URL = 'postgresql://postgres:XaaDNvfvVqfmgHzHPSrgcZCOAWYWSqkG@turntable.proxy.rlwy.net:59955/railway'
+  }
+
+  try {
+    prismaInstance = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    })
+  } catch (error) {
+    console.warn('Failed to initialize Prisma Client:', error)
+    // Return a no-op client that will throw on use
+    // In Electron mode, this shouldn't be used anyway
+    prismaInstance = {
+      $connect: async () => {},
+      $disconnect: async () => {},
+    } as any
+  }
+
+  return prismaInstance
+}
+
+export const prisma = getPrismaClientSync()
 
 export default prisma
