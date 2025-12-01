@@ -57,9 +57,16 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
+          // In server-side API routes, we can't use window.electronAPI
+          // Check if LOCAL_DATABASE_URL is set (indicates Electron mode)
+          // In Electron, we should use the cloud database via Prisma, not IPC
+          // IPC is only for client-side operations
+          
+          // Always use Prisma for server-side authentication
+          // The DATABASE_URL should point to the Railway database
           const user = await prisma.user.findUnique({
             where: { email: credentials.email },
-          })
+          });
 
           if (!user) {
             throw new Error('Invalid email or password')
@@ -86,7 +93,7 @@ export const authOptions: NextAuthOptions = {
           await prisma.user.update({
             where: { id: user.id },
             data: { lastLogin: new Date() },
-          })
+          });
 
           return {
             id: user.id,
@@ -114,14 +121,12 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      if (token) {
-        session.user = {
-          id: token.id,
-          email: token.email,
-          fullName: token.fullName,
-          role: token.role,
-          department: token.department,
-        }
+      if (token && session.user) {
+        session.user.id = token.id as string
+        session.user.email = token.email as string
+        session.user.fullName = token.fullName as string
+        session.user.role = token.role as UserRole
+        session.user.department = token.department as string
       }
       return session
     },
@@ -137,7 +142,7 @@ export const authOptions: NextAuthOptions = {
   jwt: {
     maxAge: 30 * 60, // 30 minutes
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: 'development-secret-key-that-is-long-enough-for-nextauth-requirements-minimum-32-characters-for-testing-purposes-only-change-in-production-123456789012345678901234567890',
 }
 
 /**

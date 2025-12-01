@@ -82,4 +82,5 @@ Thumbs.db
 ehthumbs.db
 Icon?
 Icon\r
-*.lnk
+*.lnkcookies.txt
+csrf_token.txt

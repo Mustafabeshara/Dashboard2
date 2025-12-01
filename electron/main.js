@@ -166,55 +166,77 @@ function startNextServer() {
 
       // No server found, start our own
       log('No existing server found, starting new one...');
-
-      const npmPath = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-      nextServer = spawn(npmPath, ['run', 'dev'], {
-        cwd: path.join(__dirname, '..'),
-        stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true,
-        env: {
-          ...process.env,
-          BROWSER: 'none',
-          LOCAL_DATABASE_URL: `file:${database.getLocalDatabasePath()}`,
-        }
-      });
-
-      nextServer.stdout.on('data', (data) => {
-        const output = data.toString();
-        log(`[Next.js] ${output.trim()}`);
-
-        // Check for port in output
-        const portMatch = output.match(/localhost:(\d+)/);
-        if (portMatch) {
-          actualServerUrl = `http://localhost:${portMatch[1]}`;
-          log(`Server URL set to: ${actualServerUrl}`);
-        }
-
-        if (output.includes('Ready') || output.includes('Local:') || output.includes('✓ Starting')) {
-          // Wait a moment for server to fully start
-          setTimeout(() => resolve(), 2000);
-        }
-      });
-
-      nextServer.stderr.on('data', (data) => {
-        const output = data.toString();
-        log(`[Next.js] ${output.trim()}`);
-
-        // Check for port in stderr too (warnings go there)
-        const portMatch = output.match(/localhost:(\d+)/);
-        if (portMatch) {
-          actualServerUrl = `http://localhost:${portMatch[1]}`;
-          log(`Server URL set to: ${actualServerUrl}`);
-        }
-      });
-
-      nextServer.on('error', (err) => {
-        log(`Failed: ${err.message}`, 'error');
-        reject(err);
-      });
-
-      // Timeout fallback
-      setTimeout(() => resolve(), 30000);
+      
+      if (!app.isPackaged) {
+        const npmPath = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+        // Generate a stable default secret if not set (for development only)
+        // NextAuth requires at least 32 characters for the secret
+        // Use a fixed secret for development to avoid configuration errors
+        const defaultSecret = process.env.NEXTAUTH_SECRET || 'dev-secret-key-for-electron-app-development-only-change-in-production-min-32-chars';
+        const defaultUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        
+        // Set DATABASE_URL to the provided PostgreSQL connection string
+        // This is needed for Prisma Client initialization
+        // In Electron mode, the auth system can use either IPC (local DB) or this connection (cloud DB)
+        // DATABASE_URL must be set in environment for cloud database access
+        const databaseUrl = process.env.DATABASE_URL;
+        const localDbPath = database.getLocalDatabasePath();
+        const localDatabaseUrl = `file:${localDbPath}`;
+        
+        nextServer = spawn(npmPath, ['run', 'dev'], {
+          cwd: path.join(__dirname, '..'),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          shell: true,
+          env: {
+            ...process.env,
+            BROWSER: 'none',
+            // DATABASE_URL is inherited from process.env if set
+            ...(databaseUrl && { DATABASE_URL: databaseUrl }),
+            LOCAL_DATABASE_URL: localDatabaseUrl,
+            NEXTAUTH_SECRET: defaultSecret,
+            NEXTAUTH_URL: defaultUrl,
+          }
+        });
+        
+        nextServer.stdout.on('data', (data) => {
+          const output = data.toString();
+          log(`[Next.js] ${output.trim()}`);
+          
+          // Check for port in output
+          const portMatch = output.match(/localhost:(\d+)/);
+          if (portMatch) {
+            actualServerUrl = `http://localhost:${portMatch[1]}`;
+            log(`Server URL set to: ${actualServerUrl}`);
+          }
+          
+          if (output.includes('Ready') || output.includes('Local:') || output.includes('✓ Starting')) {
+            // Wait a moment for server to fully start
+            setTimeout(() => resolve(), 2000);
+          }
+        });
+        
+        nextServer.stderr.on('data', (data) => {
+          const output = data.toString();
+          log(`[Next.js] ${output.trim()}`);
+          
+          // Check for port in stderr too (warnings go there)
+          const portMatch = output.match(/localhost:(\d+)/);
+          if (portMatch) {
+            actualServerUrl = `http://localhost:${portMatch[1]}`;
+            log(`Server URL set to: ${actualServerUrl}`);
+          }
+        });
+        
+        nextServer.on('error', (err) => { 
+          log(`Failed: ${err.message}`, 'error'); 
+          reject(err); 
+        });
+        
+        // Timeout fallback
+        setTimeout(() => resolve(), 30000);
+      } else { 
+        resolve(); 
+      }
     };
 
     tryPorts().catch(reject);
@@ -271,10 +293,17 @@ function createMainWindow() {
     mainWindow = null; 
   });
   
-  // Always use the server URL (works for both dev and production with standalone)
-  const url = actualServerUrl + "/dashboard";
+  // Use the actual server URL that was detected
+  // Load root path which redirects to /dashboard
+  const url = !app.isPackaged ? actualServerUrl + "/" : `file://${path.join(__dirname, '../out/index.html')}`;
   log(`Loading: ${url}`);
-  mainWindow.loadURL(url);
+  mainWindow.loadURL(url).catch((err) => {
+    log(`Failed to load URL: ${err.message}`, 'error');
+    // Fallback: try loading dashboard directly
+    mainWindow.loadURL(actualServerUrl + "/dashboard").catch((fallbackErr) => {
+      log(`Failed to load fallback URL: ${fallbackErr.message}`, 'error');
+    });
+  });
   
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
