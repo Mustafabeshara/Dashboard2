@@ -85,11 +85,60 @@ function waitForServer(url, maxAttempts = 30) {
 
 function startNextServer() {
   return new Promise((resolve, reject) => {
-    log('Checking for running dev server...');
-    
-    // First check if a server is already running
     const http = require('http');
-    
+
+    if (app.isPackaged) {
+      // Production mode: Start the standalone Next.js server
+      log('Starting Next.js standalone server for production...');
+
+      const serverPath = path.join(process.resourcesPath, 'app', '.next', 'standalone', 'server.js');
+      const publicPath = path.join(process.resourcesPath, 'app', 'public');
+      const staticPath = path.join(process.resourcesPath, 'app', '.next', 'static');
+
+      // Find an available port
+      findAvailablePort(3000).then((port) => {
+        actualServerUrl = `http://localhost:${port}`;
+
+        nextServer = spawn(process.execPath.replace('Electron', 'node').replace('electron', 'node'), [serverPath], {
+          cwd: path.join(process.resourcesPath, 'app'),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            NODE_ENV: 'production',
+            PORT: port.toString(),
+            HOSTNAME: 'localhost',
+            LOCAL_DATABASE_URL: `file:${database.getLocalDatabasePath()}`,
+          }
+        });
+
+        nextServer.stdout.on('data', (data) => {
+          log(`[Next.js] ${data.toString().trim()}`);
+        });
+
+        nextServer.stderr.on('data', (data) => {
+          log(`[Next.js] ${data.toString().trim()}`);
+        });
+
+        nextServer.on('error', (err) => {
+          log(`Failed to start production server: ${err.message}`, 'error');
+          reject(err);
+        });
+
+        // Wait for server to be ready
+        waitForServer(actualServerUrl, 30)
+          .then(() => {
+            log(`Production server ready at: ${actualServerUrl}`);
+            resolve();
+          })
+          .catch(reject);
+      });
+
+      return;
+    }
+
+    // Development mode: Check for existing server or start new one
+    log('Checking for running dev server...');
+
     // Try ports 3000-3005
     const tryPorts = async () => {
       for (let port = 3000; port <= 3005; port++) {
@@ -108,64 +157,60 @@ function startNextServer() {
           // Port not responding, try next
         }
       }
-      
+
       // No server found, start our own
       log('No existing server found, starting new one...');
-      
-      if (!app.isPackaged) {
-        const npmPath = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-        nextServer = spawn(npmPath, ['run', 'dev'], {
-          cwd: path.join(__dirname, '..'),
-          stdio: ['pipe', 'pipe', 'pipe'],
-          shell: true,
-          env: { 
-            ...process.env, 
-            BROWSER: 'none',
-            LOCAL_DATABASE_URL: `file:${database.getLocalDatabasePath()}`,
-          }
-        });
-        
-        nextServer.stdout.on('data', (data) => {
-          const output = data.toString();
-          log(`[Next.js] ${output.trim()}`);
-          
-          // Check for port in output
-          const portMatch = output.match(/localhost:(\d+)/);
-          if (portMatch) {
-            actualServerUrl = `http://localhost:${portMatch[1]}`;
-            log(`Server URL set to: ${actualServerUrl}`);
-          }
-          
-          if (output.includes('Ready') || output.includes('Local:') || output.includes('✓ Starting')) {
-            // Wait a moment for server to fully start
-            setTimeout(() => resolve(), 2000);
-          }
-        });
-        
-        nextServer.stderr.on('data', (data) => {
-          const output = data.toString();
-          log(`[Next.js] ${output.trim()}`);
-          
-          // Check for port in stderr too (warnings go there)
-          const portMatch = output.match(/localhost:(\d+)/);
-          if (portMatch) {
-            actualServerUrl = `http://localhost:${portMatch[1]}`;
-            log(`Server URL set to: ${actualServerUrl}`);
-          }
-        });
-        
-        nextServer.on('error', (err) => { 
-          log(`Failed: ${err.message}`, 'error'); 
-          reject(err); 
-        });
-        
-        // Timeout fallback
-        setTimeout(() => resolve(), 30000);
-      } else { 
-        resolve(); 
-      }
+
+      const npmPath = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      nextServer = spawn(npmPath, ['run', 'dev'], {
+        cwd: path.join(__dirname, '..'),
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true,
+        env: {
+          ...process.env,
+          BROWSER: 'none',
+          LOCAL_DATABASE_URL: `file:${database.getLocalDatabasePath()}`,
+        }
+      });
+
+      nextServer.stdout.on('data', (data) => {
+        const output = data.toString();
+        log(`[Next.js] ${output.trim()}`);
+
+        // Check for port in output
+        const portMatch = output.match(/localhost:(\d+)/);
+        if (portMatch) {
+          actualServerUrl = `http://localhost:${portMatch[1]}`;
+          log(`Server URL set to: ${actualServerUrl}`);
+        }
+
+        if (output.includes('Ready') || output.includes('Local:') || output.includes('✓ Starting')) {
+          // Wait a moment for server to fully start
+          setTimeout(() => resolve(), 2000);
+        }
+      });
+
+      nextServer.stderr.on('data', (data) => {
+        const output = data.toString();
+        log(`[Next.js] ${output.trim()}`);
+
+        // Check for port in stderr too (warnings go there)
+        const portMatch = output.match(/localhost:(\d+)/);
+        if (portMatch) {
+          actualServerUrl = `http://localhost:${portMatch[1]}`;
+          log(`Server URL set to: ${actualServerUrl}`);
+        }
+      });
+
+      nextServer.on('error', (err) => {
+        log(`Failed: ${err.message}`, 'error');
+        reject(err);
+      });
+
+      // Timeout fallback
+      setTimeout(() => resolve(), 30000);
     };
-    
+
     tryPorts().catch(reject);
   });
 }
@@ -220,8 +265,8 @@ function createMainWindow() {
     mainWindow = null; 
   });
   
-  // Use the actual server URL that was detected
-  const url = !app.isPackaged ? actualServerUrl + "/dashboard" : `file://${path.join(__dirname, '../out/index.html')}`;
+  // Always use the server URL (works for both dev and production with standalone)
+  const url = actualServerUrl + "/dashboard";
   log(`Loading: ${url}`);
   mainWindow.loadURL(url);
   
@@ -619,11 +664,9 @@ async function initializeApp() {
       log(`Database initialization warning: ${dbResult.error}`, 'warn');
     }
     
-    // Start/find Next.js server in development
-    if (!app.isPackaged) {
-      await startNextServer();
-      log(`Using server at: ${actualServerUrl}`);
-    }
+    // Start/find Next.js server (both development and production)
+    await startNextServer();
+    log(`Using server at: ${actualServerUrl}`);
     
     // Setup app
     createAppMenu();
