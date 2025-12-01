@@ -52,9 +52,14 @@ function LoginForm() {
 
       if (result?.error) {
         setError(result.error)
+      } else if (result?.ok) {
+        // Wait a moment for session to be established
+        setTimeout(() => {
+          router.push(callbackUrl)
+          router.refresh()
+        }, 100)
       } else {
-        router.push(callbackUrl)
-        router.refresh()
+        setError('Login failed for unknown reason')
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')

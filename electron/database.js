@@ -66,15 +66,21 @@ function ensureAppDataDir() {
  */
 function getPrismaClient() {
   if (!prisma) {
-    const { PrismaClient } = require('../node_modules/.prisma/local-client');
-    prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: `file:${getLocalDatabasePath()}`
-        }
-      },
-      log: ['error', 'warn']
-    });
+    try {
+      const prismaClientPath = path.join(__dirname, '..', 'node_modules', '.prisma', 'local-client');
+      const { PrismaClient } = require(prismaClientPath);
+      prisma = new PrismaClient({
+        datasources: {
+          db: {
+            url: `file:${getLocalDatabasePath()}`
+          }
+        },
+        log: ['error', 'warn']
+      });
+    } catch (error) {
+      console.error('[Database] Failed to load Prisma client:', error);
+      throw new Error(`Prisma client not found. Please run: npm run db:local:generate`);
+    }
   }
   return prisma;
 }
@@ -140,8 +146,11 @@ function runPrismaMigrate() {
     console.log(`[Database] Running migration in: ${cwd}`);
     
     // For SQLite, we use db push instead of migrate
+    // Use the local prisma version from node_modules
+    const prismaPath = path.join(__dirname, '..', 'node_modules', '.bin', 'prisma');
     const npmCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
     const child = spawn(npmCmd, [
+      '--package=prisma@6.8.2',
       'prisma', 'db', 'push',
       '--schema=prisma/schema.local.prisma',
       '--skip-generate',
@@ -262,7 +271,8 @@ function formatBytes(bytes) {
  * Setup IPC handlers for database operations
  */
 function setupDatabaseIPC() {
-  const db = getPrismaClient();
+  try {
+    const db = getPrismaClient();
   
   // ==================== UTILITY HANDLERS ====================
   
@@ -437,6 +447,17 @@ function setupDatabaseIPC() {
   });
 
   console.log('[Database] IPC handlers registered');
+  } catch (error) {
+    console.error('[Database] Failed to setup IPC handlers:', error);
+    // Register error handlers for all IPC calls
+    const errorHandler = async (event, ...args) => {
+      return { success: false, error: `Database not initialized: ${error.message}` };
+    };
+    // Register fallback handlers for critical operations
+    ipcMain.handle('db:test', errorHandler);
+    ipcMain.handle('db:get-path', () => getLocalDatabasePath());
+    ipcMain.handle('db:get-stats', () => getDatabaseStats());
+  }
 }
 
 module.exports = {

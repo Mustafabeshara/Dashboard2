@@ -84,9 +84,41 @@ export async function getPrisma(): Promise<PrismaClient> {
 /**
  * Synchronous export for backward compatibility
  * Note: This will create the client but won't wait for connection
+ * In Electron mode, this client may not be used (IPC is used instead)
  */
-export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-})
+function getPrismaClientSync(): PrismaClient {
+  // Use the shared prismaInstance variable (declared at top of file)
+  if (prismaInstance) {
+    return prismaInstance
+  }
+
+  // Check if DATABASE_URL is available - required for Prisma
+  if (!process.env.DATABASE_URL) {
+    console.warn('DATABASE_URL environment variable is not set. Database operations will fail.')
+  }
+
+  try {
+    const client = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    })
+    prismaInstance = client
+    return client
+  } catch (error) {
+    console.warn('Failed to initialize Prisma Client:', error)
+    // Create a mock client for build phase - will fail at runtime if used
+    const mockClient = new Proxy({} as PrismaClient, {
+      get(_, prop) {
+        if (prop === '$connect' || prop === '$disconnect') {
+          return async () => {}
+        }
+        throw new Error('Prisma Client failed to initialize. Check DATABASE_URL.')
+      }
+    })
+    prismaInstance = mockClient
+    return mockClient
+  }
+}
+
+export const prisma = getPrismaClientSync()
 
 export default prisma
