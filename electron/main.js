@@ -123,7 +123,8 @@ function startNextServer() {
         // Set DATABASE_URL to the provided PostgreSQL connection string
         // This is needed for Prisma Client initialization
         // In Electron mode, the auth system can use either IPC (local DB) or this connection (cloud DB)
-        const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:XaaDNvfvVqfmgHzHPSrgcZCOAWYWSqkG@turntable.proxy.rlwy.net:59955/railway';
+        // DATABASE_URL must be set in environment for cloud database access
+        const databaseUrl = process.env.DATABASE_URL;
         const localDbPath = database.getLocalDatabasePath();
         const localDatabaseUrl = `file:${localDbPath}`;
         
@@ -131,11 +132,11 @@ function startNextServer() {
           cwd: path.join(__dirname, '..'),
           stdio: ['pipe', 'pipe', 'pipe'],
           shell: true,
-          env: { 
-            ...process.env, 
+          env: {
+            ...process.env,
             BROWSER: 'none',
-            // Set DATABASE_URL to the Railway PostgreSQL database
-            DATABASE_URL: databaseUrl,
+            // DATABASE_URL is inherited from process.env if set
+            ...(databaseUrl && { DATABASE_URL: databaseUrl }),
             LOCAL_DATABASE_URL: localDatabaseUrl,
             NEXTAUTH_SECRET: defaultSecret,
             NEXTAUTH_URL: defaultUrl,

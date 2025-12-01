@@ -92,11 +92,9 @@ function getPrismaClientSync(): PrismaClient {
     return prismaInstance
   }
 
-  // Ensure DATABASE_URL is set to prevent Prisma initialization errors
-  // Use the Railway database URL if available, otherwise use a dummy
+  // Check if DATABASE_URL is available - required for Prisma
   if (!process.env.DATABASE_URL) {
-    // Fallback to Railway database URL if not set
-    process.env.DATABASE_URL = 'postgresql://postgres:XaaDNvfvVqfmgHzHPSrgcZCOAWYWSqkG@turntable.proxy.rlwy.net:59955/railway'
+    console.warn('DATABASE_URL environment variable is not set. Database operations will fail.')
   }
 
   try {
