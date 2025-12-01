@@ -1,10 +1,25 @@
 {
   "name": "medical-distribution-system",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "description": "Medical Distribution Dashboard - Desktop Application with AI Features",
+  "author": {
+    "name": "Beshara Group",
+    "email": "m.beshara@besharagroup.com"
+  },
+  "homepage": "https://github.com/Mustafabeshara/Dashboard2#readme",
+  "bugs": {
+    "url": "https://github.com/Mustafabeshara/Dashboard2/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mustafabeshara/Dashboard2.git"
+  },
+  "license": "UNLICENSED",
   "engines": {
     "node": ">=20.9.0"
   },
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -20,6 +35,8 @@
     "electron:build": "npm run build && electron-builder",
     "electron:builder": "electron-builder",
     "electron:builder:mac": "electron-builder --mac",
+    "electron:builder:win": "electron-builder --win",
+    "electron:builder:linux": "electron-builder --linux",
     "db:local:generate": "prisma generate --schema=prisma/schema.local.prisma",
     "db:local:push": "prisma db push --schema=prisma/schema.local.prisma",
     "db:local:studio": "prisma studio --schema=prisma/schema.local.prisma",
@@ -62,6 +79,9 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "electron-log": "^5.2.4",
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.3.9",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
@@ -116,11 +136,6 @@
     "tsx": "^4.19.4",
     "typescript": "^5",
     "wait-on": "^9.0.3"
-  },
-  "main": "electron/main.js",
-  "author": {
-    "name": "Beshara Group",
-    "email": "m.beshara@besharagroup.com"
   },
   "build": {
     "extends": "electron-builder.json"
