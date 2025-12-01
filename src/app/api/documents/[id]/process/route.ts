@@ -5,12 +5,14 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { extractTenderFromDocument, validateTenderExtraction, needsHumanReview } from '@/lib/ai/tender-extraction'
+import { extractTenderFromDocument, extractTenderFromText, validateTenderExtraction, needsHumanReview } from '@/lib/ai/tender-extraction'
 import { ExtractionType } from '@prisma/client'
 import { ocr } from '@/lib/ocr'
 import { audit } from '@/lib/audit'
 import { WebSocketHelpers } from '@/lib/websocket'
 import { email, EmailTemplate } from '@/lib/email'
+import { downloadFileAsBuffer, extractTextFromBuffer, extractTextFromBufferWithChunking } from '@/lib/document-processor'
+import { preprocessDocument } from '@/lib/document-preprocessor'
 
 // Map document types to extraction types
 const DOCUMENT_TO_EXTRACTION_TYPE: Record<string, ExtractionType> = {
@@ -119,12 +121,19 @@ export async function POST(
 
     // Check if document needs OCR (scanned image)
     let documentUrl = document.url
+    let ocrText = ''
     if (ocr.isScannedDocument(document.mimeType)) {
       try {
         console.log(`[ProcessDocument] Document appears to be scanned, running OCR...`)
         const ocrResult = await ocr.extractText(document.url)
         console.log(`[ProcessDocument] OCR extracted ${ocrResult.text.length} characters with ${(ocrResult.confidence * 100).toFixed(1)}% confidence`)
-        // OCR result can be used if needed, but Gemini can also process images directly
+        ocrText = ocrResult.text
+        
+        // If OCR confidence is high enough, we can use it directly
+        if (ocrResult.confidence > 0.8 && ocrResult.text.length > 100) {
+          console.log(`[ProcessDocument] High confidence OCR result, using as primary text source`)
+          // We'll use the OCR text as input to our extraction
+        }
       } catch (error) {
         console.warn('[ProcessDocument] OCR failed, using direct file processing:', error)
       }
@@ -135,32 +144,125 @@ export async function POST(
     
     let extractedData
     try {
-      extractedData = await extractTenderFromDocument(documentUrl, document.mimeType)
+      // If we have high confidence OCR text, use it for extraction
+      if (ocrText && ocrText.length > 100) {
+        console.log(`[ProcessDocument] Using OCR text for extraction (${ocrText.length} characters)`)
+        // Preprocess the OCR text before extraction
+        const preprocessed = await preprocessDocument(ocrText, {
+          cleanText: true,
+          normalizeText: true,
+          removeHeadersFooters: true
+        });
+        console.log(`[ProcessDocument] Preprocessed OCR text, confidence: ${preprocessed.metadata.confidence}`);
+        extractedData = await extractTenderFromText(preprocessed.content)
+      } else {
+        // Use the original document processing approach
+        extractedData = await extractTenderFromDocument(documentUrl, document.mimeType)
+      }
     } catch (extractError: any) {
-      console.error(`[ProcessDocument] Extraction failed:`, extractError)
+      console.warn(`[ProcessDocument] LLM extraction failed, trying fallback text extraction:`, extractError)
       
-      await prisma.documentExtraction.update({
-        where: { id: extraction.id },
-        data: {
-          status: 'FAILED',
-          errorMessage: extractError.message || 'Extraction failed',
-          processingTime: Date.now() - startTime,
-        },
-      })
+      // Fallback to text extraction + simpler LLM call
+      try {
+        const buffer = await downloadFileAsBuffer(documentUrl)
+        const processedDoc = await extractTextFromBuffer(buffer, document.mimeType)
+        
+        // For very large documents, use chunking
+        if (processedDoc.text.length > 100000) { // If document is larger than 100K characters
+          console.log(`[ProcessDocument] Large document detected (${processedDoc.text.length} chars), using chunked processing`)
+          
+          // Extract text with chunking
+          const chunks = await extractTextFromBufferWithChunking(buffer, document.mimeType, 50000)
+          console.log(`[ProcessDocument] Document split into ${chunks.length} chunks`)
+          
+          // Process each chunk and combine results
+          let combinedResults: any[] = []
+          let combinedText = ''
+          
+          for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i]
+            console.log(`[ProcessDocument] Processing chunk ${i + 1}/${chunks.length}`)
+            
+            // Preprocess the chunk
+            const preprocessed = await preprocessDocument(chunk.text, {
+              cleanText: true,
+              normalizeText: true,
+              removeHeadersFooters: true
+            });
+            
+            // Extract from chunk
+            try {
+              const chunkResult = await extractTenderFromText(preprocessed.content)
+              combinedResults.push(chunkResult)
+              combinedText += `\n\n--- CHUNK ${i + 1} ---\n${preprocessed.content}`
+              
+              console.log(`[ProcessDocument] Chunk ${i + 1} processed with confidence: ${chunkResult.confidence?.overall || 0}`)
+            } catch (chunkError) {
+              console.warn(`[ProcessDocument] Failed to process chunk ${i + 1}:`, chunkError)
+            }
+          }
+          
+          // Combine results from all chunks
+          if (combinedResults.length > 0) {
+            extractedData = combineChunkResults(combinedResults)
+          } else {
+            throw new Error('Failed to extract data from any chunk')
+          }
+        } else {
+          // Combine OCR text with extracted text if both are available
+          let combinedText = processedDoc.text
+          if (ocrText && ocrText.length > 0) {
+            combinedText = `${ocrText}
 
-      await prisma.document.update({
-        where: { id },
-        data: { status: 'FAILED' },
-      })
+---EXTRACTED_TEXT---
 
-      return NextResponse.json(
-        {
-          success: false,
-          error: extractError.message || 'Extraction failed',
-          processingTime: Date.now() - startTime,
-        },
-        { status: 500 }
-      )
+${processedDoc.text}`
+          }
+          
+          // If we got text, try a simpler extraction approach
+          if (combinedText && combinedText.length > 0) {
+            console.log(`[ProcessDocument] Extracted ${combinedText.length} characters from document`)
+            
+            // Preprocess the combined text before extraction
+            const preprocessed = await preprocessDocument(combinedText, {
+              cleanText: true,
+              normalizeText: true,
+              removeHeadersFooters: true
+            });
+            console.log(`[ProcessDocument] Preprocessed combined text, confidence: ${preprocessed.metadata.confidence}`);
+            
+            // Try extracting with just the text content
+            extractedData = await extractTenderFromText(preprocessed.content)
+          } else {
+            throw new Error('No text extracted from document')
+          }
+        }
+      } catch (fallbackError: any) {
+        console.error(`[ProcessDocument] Fallback extraction also failed:`, fallbackError)
+        
+        await prisma.documentExtraction.update({
+          where: { id: extraction.id },
+          data: {
+            status: 'FAILED',
+            errorMessage: extractError.message || 'Extraction failed',
+            processingTime: Date.now() - startTime,
+          },
+        })
+
+        await prisma.document.update({
+          where: { id },
+          data: { status: 'FAILED' },
+        })
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: extractError.message || 'Extraction failed',
+            processingTime: Date.now() - startTime,
+          },
+          { status: 500 }
+        )
+      }
     }
 
     // Validate extraction
@@ -278,4 +380,80 @@ export async function GET(
       { status: 500 }
     )
   }
+}
+
+// Helper function to combine results from multiple chunks
+function combineChunkResults(results: any[]): any {
+  if (results.length === 0) {
+    return null;
+  }
+  
+  if (results.length === 1) {
+    return results[0];
+  }
+  
+  // Combine the best results from all chunks
+  const combined: any = {
+    reference: '',
+    title: '',
+    organization: '',
+    closingDate: '',
+    items: [],
+    notes: '',
+    confidence: {
+      overall: 0,
+      reference: 0,
+      title: 0,
+      organization: 0,
+      closingDate: 0,
+      items: 0
+    }
+  };
+  
+  // Find the best values for each field based on confidence
+  for (const result of results) {
+    if (result.confidence?.reference > combined.confidence.reference) {
+      combined.reference = result.reference;
+      combined.confidence.reference = result.confidence.reference;
+    }
+    
+    if (result.confidence?.title > combined.confidence.title) {
+      combined.title = result.title;
+      combined.confidence.title = result.confidence.title;
+    }
+    
+    if (result.confidence?.organization > combined.confidence.organization) {
+      combined.organization = result.organization;
+      combined.confidence.organization = result.confidence.organization;
+    }
+    
+    if (result.confidence?.closingDate > combined.confidence.closingDate) {
+      combined.closingDate = result.closingDate;
+      combined.confidence.closingDate = result.confidence.closingDate;
+    }
+    
+    // Combine items from all chunks
+    if (Array.isArray(result.items) && result.items.length > 0) {
+      combined.items = [...combined.items, ...result.items];
+      // Update items confidence as average
+      if (result.confidence?.items) {
+        const currentItemsConf = combined.confidence.items;
+        const newItemsConf = result.confidence.items;
+        combined.confidence.items = (currentItemsConf + newItemsConf) / 2;
+      }
+    }
+  }
+  
+  // Calculate overall confidence as average of all field confidences
+  const confidences = [
+    combined.confidence.reference,
+    combined.confidence.title,
+    combined.confidence.organization,
+    combined.confidence.closingDate,
+    combined.confidence.items
+  ];
+  
+  combined.confidence.overall = confidences.reduce((sum, conf) => sum + conf, 0) / confidences.length;
+  
+  return combined;
 }
