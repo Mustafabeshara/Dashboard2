@@ -5,6 +5,7 @@
 
 import { invokeUnifiedLLM, LLMProvider, getRecommendedProvider } from './llm-provider';
 import { TENDER_EXTRACTION_PROMPT, TENDER_EXTRACTION_SYSTEM_PROMPT } from './config';
+import { validateTenderExtractionWithZod, sanitizeTenderExtraction } from './tender-validation';
 
 export interface TenderExtractionResult {
   reference: string;
@@ -16,7 +17,7 @@ export interface TenderExtractionResult {
     quantity: number;
     unit: string;
   }>;
-  notes: string;
+  notes?: string;
   confidence?: {
     overall: number;
     reference: number;
@@ -39,36 +40,64 @@ export function parseTenderExtractionResult(extractedText: string): TenderExtrac
 
   try {
     const parsedData = JSON.parse(cleanedText);
+    
+    // Sanitize the data first
+    const sanitizedData = sanitizeTenderExtraction(parsedData);
+    
+    // Validate with Zod
+    const validation = validateTenderExtractionWithZod(sanitizedData);
+    
+    if (validation.success && validation.data) {
+      console.log('Successfully validated tender extraction with Zod');
+      return validation.data;
+    } else {
+      console.warn('Zod validation failed:', validation.errors?.flatten());
+      
+      // Try to extract partial data using regex patterns as fallback
+      const partialData = extractPartialData(cleanedText);
+      
+      if (partialData) {
+        console.log('Successfully extracted partial data from malformed JSON');
+        // Validate the partial data as well
+        const partialValidation = validateTenderExtractionWithZod(partialData);
+        if (partialValidation.success && partialValidation.data) {
+          return partialValidation.data;
+        }
+      }
+    }
 
-    // Validate and provide defaults for required fields
+    // Return with default values if validation fails
     return {
-      reference: parsedData.reference || '',
-      title: parsedData.title || '',
-      organization: parsedData.organization || '',
-      closingDate: parsedData.closingDate || '',
-      items: Array.isArray(parsedData.items)
-        ? parsedData.items.map((item: any) => ({
-            itemDescription: item.itemDescription || item.description || '',
-            quantity:
-              typeof item.quantity === 'number'
-                ? item.quantity
-                : parseInt(item.quantity) || 1,
-            unit: item.unit || 'pcs',
-          }))
-        : [],
-      notes: parsedData.notes || '',
-      confidence: parsedData.confidence || {
-        overall: 0.5,
-        reference: 0.5,
-        title: 0.5,
-        organization: 0.5,
-        closingDate: 0.5,
-        items: 0.5,
+      reference: '',
+      title: '',
+      organization: '',
+      closingDate: '',
+      items: [],
+      notes: 'Extraction failed. Please enter data manually.',
+      confidence: {
+        overall: 0.0,
+        reference: 0.0,
+        title: 0.0,
+        organization: 0.0,
+        closingDate: 0.0,
+        items: 0.0,
       },
     };
   } catch (e) {
     console.error('JSON parsing error:', e);
     console.error('Raw extracted text:', cleanedText);
+    
+    // Try to extract partial data using regex patterns
+    const partialData = extractPartialData(cleanedText);
+    
+    if (partialData) {
+      console.log('Successfully extracted partial data from malformed JSON');
+      // Validate the partial data
+      const partialValidation = validateTenderExtractionWithZod(partialData);
+      if (partialValidation.success && partialValidation.data) {
+        return partialValidation.data;
+      }
+    }
 
     return {
       reference: '',
@@ -86,6 +115,79 @@ export function parseTenderExtractionResult(extractedText: string): TenderExtrac
         items: 0.0,
       },
     };
+  }
+}
+
+/**
+ * Extract partial data from malformed JSON using regex patterns
+ * @param text - Text that failed JSON parsing
+ * @returns Partially extracted data or null
+ */
+function extractPartialData(text: string): TenderExtractionResult | null {
+  try {
+    const result: TenderExtractionResult = {
+      reference: '',
+      title: '',
+      organization: '',
+      closingDate: '',
+      items: [],
+      notes: '',
+      confidence: {
+        overall: 0.3, // Lower confidence for partial extraction
+        reference: 0.0,
+        title: 0.0,
+        organization: 0.0,
+        closingDate: 0.0,
+        items: 0.0,
+      },
+    };
+    
+    // Extract reference number
+    const refMatch = text.match(/(?:reference|رقم\s*الملف|file\s*no)[:\s]*([A-Z0-9\-_]+)/i);
+    if (refMatch && result.confidence) {
+      result.reference = refMatch[1];
+      result.confidence.reference = 0.7;
+    }
+    
+    // Extract title
+    const titleMatch = text.match(/(?:title|subject|الموضوع)[:\s]*([^\n\r]+)/i);
+    if (titleMatch && result.confidence) {
+      result.title = titleMatch[1].trim();
+      result.confidence.title = 0.7;
+    }
+    
+    // Extract organization
+    const orgMatch = text.match(/(?:organization|issuer|الجهة)[:\s]*([^\n\r]+)/i);
+    if (orgMatch && result.confidence) {
+      result.organization = orgMatch[1].trim();
+      result.confidence.organization = 0.7;
+    }
+    
+    // Extract closing date
+    const dateMatch = text.match(/(?:closing\s*date|deadline|الموعد)[:\s]*([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}[\/\-][0-9]{2}[\/\-][0-9]{4})/i);
+    if (dateMatch && result.confidence) {
+      result.closingDate = dateMatch[1];
+      result.confidence.closingDate = 0.7;
+    }
+    
+    // Update overall confidence based on extracted fields
+    if (result.confidence) {
+      const extractedFields = [
+        result.confidence.reference,
+        result.confidence.title,
+        result.confidence.organization,
+        result.confidence.closingDate
+      ].filter(conf => conf > 0).length;
+      
+      result.confidence.overall = Math.min(0.3 + (extractedFields * 0.15), 0.9);
+      
+      return result.confidence.overall > 0.3 ? result : null;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Partial data extraction failed:', error);
+    return null;
   }
 }
 
@@ -114,50 +216,144 @@ export async function extractTenderFromDocument(
   const provider = isPdf ? LLMProvider.GEMINI : getRecommendedProvider('image');
   console.log(`[ExtractTender] Using provider: ${provider}`);
 
-  let response;
-  try {
-    response = await invokeUnifiedLLM(
-      {
-        messages: [
-          { role: 'system', content: TENDER_EXTRACTION_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: [{ type: 'text', text: TENDER_EXTRACTION_PROMPT }, contentPart],
-          },
-        ],
-      },
-      { provider }
-    );
-  } catch (llmError: any) {
-    console.error(`[ExtractTender] LLM invocation failed:`, llmError);
-    throw new Error(`LLM extraction failed: ${llmError.message || 'Unknown LLM error'}`);
+  // Retry mechanism
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`[ExtractTender] Attempt ${attempt}/3`);
+      
+      const response = await invokeUnifiedLLM(
+        {
+          messages: [
+            { role: 'system', content: TENDER_EXTRACTION_SYSTEM_PROMPT },
+            {
+              role: 'user',
+              content: [{ type: 'text', text: TENDER_EXTRACTION_PROMPT }, contentPart],
+            },
+          ],
+        },
+        { provider }
+      );
+
+      // Validate response structure
+      if (!response || !response.choices || response.choices.length === 0) {
+        throw new Error('Invalid LLM response: no choices returned');
+      }
+
+      const rawContent = response.choices[0]?.message?.content;
+      if (!rawContent) {
+        throw new Error('No content extracted from document');
+      }
+
+      const extractedText = typeof rawContent === 'string' ? rawContent : '{}';
+      console.log(`[ExtractTender] Raw extracted text length: ${extractedText.length}`);
+
+      const parsedData = parseTenderExtractionResult(extractedText);
+      
+      // If we got a result with very low confidence, retry with a different provider
+      if (parsedData.confidence?.overall && parsedData.confidence.overall < 0.3 && attempt < 3) {
+        console.log(`[ExtractTender] Low confidence result (${parsedData.confidence.overall}), retrying with different provider`);
+        lastError = new Error('Low confidence extraction result');
+        continue;
+      }
+      
+      console.log(`[ExtractTender] Successfully processed document`);
+      return parsedData;
+    } catch (llmError: any) {
+      console.error(`[ExtractTender] LLM invocation failed on attempt ${attempt}:`, llmError);
+      lastError = llmError;
+      
+      // Don't retry on validation errors
+      if (llmError.message?.includes('Invalid LLM response') || llmError.message?.includes('No content')) {
+        break;
+      }
+      
+      // Wait before retrying (exponential backoff)
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
   }
+  
+  throw new Error(`LLM extraction failed after 3 attempts: ${lastError?.message || 'Unknown error'}`);
+}
 
-  // Validate response structure
-  if (!response || !response.choices || response.choices.length === 0) {
-    console.error(`[ExtractTender] Invalid LLM response structure:`, JSON.stringify(response));
-    throw new Error('Invalid LLM response: no choices returned');
+/**
+ * Extract tender data from text content
+ * @param text - Text content to extract tender data from
+ * @returns Extracted tender data with confidence scores
+ */
+export async function extractTenderFromText(
+  text: string
+): Promise<TenderExtractionResult> {
+  console.log(`[ExtractTenderText] Processing text content, length: ${text.length}`);
+
+  // Truncate text if too long to avoid token limits
+  const maxLength = 100000; // Adjust based on model limits
+  const truncatedText = text.length > maxLength ? text.substring(0, maxLength) + '\n... [truncated]' : text;
+
+  // Retry mechanism
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`[ExtractTenderText] Attempt ${attempt}/3`);
+      
+      const response = await invokeUnifiedLLM(
+        {
+          messages: [
+            { role: 'system', content: TENDER_EXTRACTION_SYSTEM_PROMPT },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: TENDER_EXTRACTION_PROMPT },
+                { type: 'text', text: `Extract tender information from the following text:\n\n${truncatedText}` }
+              ],
+            },
+          ],
+        }
+      );
+
+      // Validate response structure
+      if (!response || !response.choices || response.choices.length === 0) {
+        throw new Error('Invalid LLM response: no choices returned');
+      }
+
+      const rawContent = response.choices[0]?.message?.content;
+      if (!rawContent) {
+        throw new Error('No content extracted from document');
+      }
+
+      const extractedText = typeof rawContent === 'string' ? rawContent : '{}';
+      console.log(`[ExtractTenderText] Raw extracted text length: ${extractedText.length}`);
+
+      const parsedData = parseTenderExtractionResult(extractedText);
+      
+      // If we got a result with very low confidence, retry
+      if (parsedData.confidence?.overall && parsedData.confidence.overall < 0.3 && attempt < 3) {
+        console.log(`[ExtractTenderText] Low confidence result (${parsedData.confidence.overall}), retrying`);
+        lastError = new Error('Low confidence extraction result');
+        continue;
+      }
+      
+      console.log(`[ExtractTenderText] Successfully processed text content`);
+      return parsedData;
+    } catch (llmError: any) {
+      console.error(`[ExtractTenderText] LLM invocation failed on attempt ${attempt}:`, llmError);
+      lastError = llmError;
+      
+      // Don't retry on validation errors
+      if (llmError.message?.includes('Invalid LLM response') || llmError.message?.includes('No content')) {
+        break;
+      }
+      
+      // Wait before retrying (exponential backoff)
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
   }
-
-  const rawContent = response.choices[0]?.message?.content;
-  if (!rawContent) {
-    console.error(`[ExtractTender] No content in LLM response`);
-    throw new Error('No content extracted from document');
-  }
-
-  const extractedText = typeof rawContent === 'string' ? rawContent : '{}';
-  console.log(`[ExtractTender] Raw extracted text length: ${extractedText.length}`);
-
-  let parsedData;
-  try {
-    parsedData = parseTenderExtractionResult(extractedText);
-  } catch (parseError: any) {
-    console.error(`[ExtractTender] Parse error:`, parseError);
-    throw new Error(`Failed to parse extracted data: ${parseError.message}`);
-  }
-
-  console.log(`[ExtractTender] Successfully processed document`);
-  return parsedData;
+  
+  throw new Error(`LLM extraction failed after 3 attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
 /**
