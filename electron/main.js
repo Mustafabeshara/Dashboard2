@@ -1,11 +1,12 @@
 /**
  * Medical Distribution Dashboard - Electron Main Process
- * With Local Database Support
+ * With Local Database Support and AI Features
  */
 
-const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain, shell, dialog, Notification } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 // Import database module
 const database = require('./database');
@@ -26,6 +27,10 @@ let nextServer = null;
 let isQuitting = false;
 let isDatabaseReady = false;
 let actualServerUrl = CONFIG.DEV_SERVER_URL;
+
+// AI Processing State
+let aiProcessingQueue = [];
+let isAIProcessing = false;
 
 function log(message, level = 'info') {
   const timestamp = new Date().toISOString();
@@ -253,8 +258,19 @@ function createTray() {
         mainWindow.loadURL(`${actualServerUrl}/test-db`);
       }
     }},
+    { label: 'Process Documents', click: () => { 
+      if (mainWindow) mainWindow.webContents.send('process-documents'); 
+    }},
     { label: 'Sync Now', click: () => { 
       if (mainWindow) mainWindow.webContents.send('sync-now'); 
+    }},
+    { label: 'AI Processing Queue', click: () => {
+      if (mainWindow) {
+        mainWindow.webContents.send('show-notification', {
+          title: 'AI Processing Queue',
+          message: `Pending: ${aiProcessingQueue.length} items\nProcessing: ${isAIProcessing ? 'Yes' : 'No'}`,
+        });
+      }
     }},
     { label: 'Database Info', click: () => {
       const stats = database.getDatabaseStats();
@@ -288,6 +304,9 @@ function createAppMenu() {
           if (mainWindow) {
             mainWindow.loadURL(`${actualServerUrl}/test-db`);
           }
+        }},
+        { label: 'Process Documents', accelerator: 'Cmd+Shift+P', click: () => {
+          if (mainWindow) mainWindow.webContents.send('process-documents');
         }},
         { label: 'Database Info...', click: async () => {
           const stats = database.getDatabaseStats();
@@ -338,6 +357,42 @@ function createAppMenu() {
       ] 
     },
     { 
+      label: 'AI Features', 
+      submenu: [
+        { label: 'Process All Documents', click: () => { 
+          if (mainWindow) mainWindow.webContents.send('process-all-documents'); 
+        }},
+        { label: 'AI Processing Queue', click: () => { 
+          if (mainWindow) mainWindow.webContents.send('show-ai-queue'); 
+        }},
+        { label: 'Clear Processing Queue', click: () => { 
+          aiProcessingQueue = [];
+          if (mainWindow) {
+            mainWindow.webContents.send('show-notification', {
+              title: 'AI Processing',
+              message: 'Processing queue cleared',
+            });
+          }
+        }},
+        { type: 'separator' },
+        { label: 'Import Documents', click: async () => {
+          const result = await dialog.showOpenDialog(mainWindow, {
+            properties: ['openFile', 'multiSelections'],
+            filters: [
+              { name: 'Documents', extensions: ['pdf', 'jpg', 'jpeg', 'png'] },
+              { name: 'All Files', extensions: ['*'] }
+            ]
+          });
+          
+          if (!result.canceled && result.filePaths.length > 0) {
+            if (mainWindow) {
+              mainWindow.webContents.send('import-documents', result.filePaths);
+            }
+          }
+        }}
+      ] 
+    },
+    { 
       label: 'Window', 
       submenu: [
         { role: 'minimize' }, 
@@ -350,6 +405,8 @@ function createAppMenu() {
       label: 'Navigate',
       submenu: [
         { label: 'Dashboard', click: () => mainWindow?.loadURL(`${actualServerUrl}/`) },
+        { label: 'Documents', click: () => mainWindow?.loadURL(`${actualServerUrl}/documents`) },
+        { label: 'Tenders', click: () => mainWindow?.loadURL(`${actualServerUrl}/tenders`) },
         { label: 'Test Database', click: () => mainWindow?.loadURL(`${actualServerUrl}/test-db`) },
         { type: 'separator' },
         { label: 'Back', accelerator: 'Cmd+[', click: () => mainWindow?.webContents.goBack() },
@@ -358,6 +415,121 @@ function createAppMenu() {
     }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// AI Processing Functions
+async function addToAIProcessingQueue(documentId, documentPath, mimeType) {
+  const queueItem = {
+    id: `queue-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    documentId,
+    documentPath,
+    mimeType,
+    status: 'pending',
+    createdAt: new Date(),
+    retryCount: 0
+  };
+  
+  aiProcessingQueue.push(queueItem);
+  
+  // Notify UI
+  if (mainWindow) {
+    mainWindow.webContents.send('ai-queue-update', {
+      queueLength: aiProcessingQueue.length,
+      status: 'added',
+      item: queueItem
+    });
+  }
+  
+  // Start processing if not already running
+  if (!isAIProcessing) {
+    processAIQueue();
+  }
+  
+  return queueItem;
+}
+
+async function processAIQueue() {
+  if (aiProcessingQueue.length === 0) {
+    isAIProcessing = false;
+    return;
+  }
+  
+  isAIProcessing = true;
+  const item = aiProcessingQueue[0];
+  
+  try {
+    // Update status
+    item.status = 'processing';
+    if (mainWindow) {
+      mainWindow.webContents.send('ai-queue-update', {
+        queueLength: aiProcessingQueue.length,
+        status: 'processing',
+        item
+      });
+    }
+    
+    // Process document (this would integrate with your AI extraction system)
+    log(`Processing document: ${item.documentPath}`);
+    
+    // Simulate AI processing
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // In a real implementation, this would:
+    // 1. Read the document file
+    // 2. Process with pdf-parse or OCR
+    // 3. Send to LLM for extraction
+    // 4. Validate with Zod schemas
+    // 5. Store results in database
+    
+    // Remove from queue
+    aiProcessingQueue.shift();
+    
+    // Notify success
+    if (mainWindow) {
+      mainWindow.webContents.send('ai-queue-update', {
+        queueLength: aiProcessingQueue.length,
+        status: 'completed',
+        item: { ...item, status: 'completed' }
+      });
+      
+      // Show notification
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'Document Processed',
+          body: `Document ${path.basename(item.documentPath)} has been processed successfully`
+        }).show();
+      }
+    }
+    
+    // Process next item
+    setTimeout(processAIQueue, 1000);
+    
+  } catch (error) {
+    log(`AI processing failed for ${item.documentPath}: ${error.message}`, 'error');
+    item.status = 'failed';
+    item.errorMessage = error.message;
+    item.retryCount++;
+    
+    // Retry logic
+    if (item.retryCount < 3) {
+      // Retry
+      setTimeout(processAIQueue, 5000);
+    } else {
+      // Remove from queue after 3 failures
+      aiProcessingQueue.shift();
+      
+      if (mainWindow) {
+        mainWindow.webContents.send('ai-queue-update', {
+          queueLength: aiProcessingQueue.length,
+          status: 'failed',
+          item
+        });
+      }
+      
+      // Process next item
+      setTimeout(processAIQueue, 1000);
+    }
+  }
 }
 
 function setupIpcHandlers() {
@@ -381,6 +553,51 @@ function setupIpcHandlers() {
   ipcMain.handle('is-online', () => 
     require('dns').promises.lookup('google.com').then(() => true).catch(() => false)
   );
+  
+  // AI Processing
+  ipcMain.handle('ai:add-to-queue', async (event, { documentId, documentPath, mimeType }) => {
+    return await addToAIProcessingQueue(documentId, documentPath, mimeType);
+  });
+  
+  ipcMain.handle('ai:get-queue', () => ({
+    queue: aiProcessingQueue,
+    isProcessing: isAIProcessing
+  }));
+  
+  ipcMain.handle('ai:clear-queue', () => {
+    aiProcessingQueue = [];
+    isAIProcessing = false;
+    return { success: true };
+  });
+  
+  // File system operations
+  ipcMain.handle('fs:select-files', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Documents', extensions: ['pdf', 'jpg', 'jpeg', 'png'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    return result;
+  });
+  
+  ipcMain.handle('fs:read-file', async (event, filePath) => {
+    try {
+      const buffer = fs.readFileSync(filePath);
+      return {
+        success: true,
+        data: buffer.toString('base64'),
+        size: buffer.length
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
   
   // Setup database IPC handlers
   database.setupDatabaseIPC();
