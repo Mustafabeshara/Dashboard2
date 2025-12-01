@@ -97,12 +97,25 @@ const ALLOWED_CHANNELS = {
     'db:settings:set',
     'db:settings:delete',
     
+    // AI Processing
+    'ai:add-to-queue',
+    'ai:get-queue',
+    'ai:clear-queue',
+    
+    // File System
+    'fs:select-files',
+    'fs:read-file',
+    
     // Generic query
     'db:query',
   ],
   send: [
     'app-ready',
     'request-sync',
+    'process-documents',
+    'process-all-documents',
+    'show-ai-queue',
+    'import-documents'
   ],
   receive: [
     'sync-now',
@@ -110,6 +123,12 @@ const ALLOWED_CHANNELS = {
     'sync-error',
     'open-settings',
     'database-update',
+    'ai-queue-update',
+    'show-notification',
+    'process-documents',
+    'process-all-documents',
+    'show-ai-queue',
+    'import-documents'
   ]
 };
 
