@@ -125,7 +125,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string
         session.user.email = token.email as string
         session.user.fullName = token.fullName as string
-        session.user.role = token.role as string
+        session.user.role = token.role as UserRole
         session.user.department = token.department as string
       }
       return session
