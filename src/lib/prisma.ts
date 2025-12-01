@@ -98,20 +98,25 @@ function getPrismaClientSync(): PrismaClient {
   }
 
   try {
-    prismaInstance = new PrismaClient({
+    const client = new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     })
+    prismaInstance = client
+    return client
   } catch (error) {
     console.warn('Failed to initialize Prisma Client:', error)
-    // Return a no-op client that will throw on use
-    // In Electron mode, this shouldn't be used anyway
-    prismaInstance = {
-      $connect: async () => {},
-      $disconnect: async () => {},
-    } as any
+    // Create a mock client for build phase - will fail at runtime if used
+    const mockClient = new Proxy({} as PrismaClient, {
+      get(_, prop) {
+        if (prop === '$connect' || prop === '$disconnect') {
+          return async () => {}
+        }
+        throw new Error('Prisma Client failed to initialize. Check DATABASE_URL.')
+      }
+    })
+    prismaInstance = mockClient
+    return mockClient
   }
-
-  return prismaInstance
 }
 
 export const prisma = getPrismaClientSync()
