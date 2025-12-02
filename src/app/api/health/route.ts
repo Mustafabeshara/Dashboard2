@@ -117,7 +117,6 @@ export async function GET(request: NextRequest) {
       environment: envInfo,
       checks,
       responseTime: Date.now() - startTime,
-      services: {
     })
   } catch (error) {
     return NextResponse.json(

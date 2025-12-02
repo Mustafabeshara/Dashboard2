@@ -4,6 +4,8 @@
  */
 
 import { AI_CONFIG, AI_PROVIDERS, AIProviderConfig, TASK_MODELS } from './config'
+import { recordMetric, timeAsync } from '../performance'
+import { logger } from '../logger'
 
 export interface AIRequest {
   prompt: string
@@ -315,43 +317,79 @@ async function callAnthropic(
 }
 
 /**
- * Call a specific AI provider
+ * Call a specific AI provider with timeout
  */
 async function callProvider(
   provider: AIProviderConfig,
   request: AIRequest
 ): Promise<AIResponse> {
   const startTime = Date.now()
+  const timeout = AI_CONFIG.defaultTimeout
 
   try {
+    // Create abort controller for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+
     let response: AIResponse
 
-    switch (provider.name) {
-      case 'Groq':
-        response = await callGroq(provider, request)
-        break
-      case 'Gemini':
-      case 'Google AI Studio':
-        response = await callGemini(provider, request)
-        break
-      case 'Claude (Anthropic)':
-        response = await callAnthropic(provider, request)
-        break
-      default:
-        throw new Error(`Unknown provider: ${provider.name}`)
+    try {
+      response = await timeAsync(
+        'ai_request',
+        `${provider.name}:${request.taskType || 'general'}`,
+        async () => {
+          switch (provider.name) {
+            case 'Groq':
+              return await callGroq(provider, request)
+            case 'Gemini':
+            case 'Google AI Studio':
+              return await callGemini(provider, request)
+            case 'Claude (Anthropic)':
+              return await callAnthropic(provider, request)
+            default:
+              throw new Error(`Unknown provider: ${provider.name}`)
+          }
+        },
+        { provider: provider.name, model: provider.model }
+      )
+    } finally {
+      clearTimeout(timeoutId)
     }
 
     response.latency = Date.now() - startTime
     incrementRateLimits(provider.name)
+    
+    logger.info('AI request completed', {
+      context: {
+        provider: provider.name,
+        model: provider.model,
+        latency: response.latency,
+        tokensUsed: response.usage?.totalTokens,
+      },
+    })
+    
     return response
   } catch (error) {
+    const latency = Date.now() - startTime
+    const errorMessage = error instanceof Error 
+      ? (error.name === 'AbortError' ? `Request timeout after ${timeout}ms` : error.message)
+      : 'Unknown error'
+    
+    logger.error('AI request failed', error as Error, {
+      context: {
+        provider: provider.name,
+        model: provider.model,
+        latency,
+      },
+    })
+    
     return {
       success: false,
       content: '',
       provider: provider.name,
       model: provider.model,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      latency: Date.now() - startTime,
+      error: errorMessage,
+      latency,
     }
   }
 }

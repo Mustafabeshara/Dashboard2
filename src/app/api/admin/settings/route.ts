@@ -1,14 +1,21 @@
 /**
  * Admin Settings API
- * Manages system-wide configuration settings
+ * Provides access to system configuration (read from environment)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getEnvironmentInfo, getEnabledProviders } from '@/lib/env-validator'
+import { 
+  APPROVAL_THRESHOLDS, 
+  BUDGET_THRESHOLDS, 
+  CURRENCY_CONFIG 
+} from '@/lib/config/business-rules'
 
-// GET - Fetch all settings or by category
+// System settings are configured via environment variables
+// This endpoint provides a read-only view of current configuration
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -21,21 +28,56 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const category = searchParams.get('category')
+    const envInfo = getEnvironmentInfo()
+    const aiProviders = getEnabledProviders()
 
-    const settings = await prisma.systemSettings.findMany({
-      where: category ? { category } : undefined,
-      orderBy: { key: 'asc' },
+    // Return current configuration (read-only)
+    const settings = {
+      application: {
+        name: 'Medical Distribution Dashboard',
+        version: '1.0.0',
+        environment: envInfo.nodeEnv,
+        isElectron: envInfo.isElectron,
+      },
+      business: {
+        currency: CURRENCY_CONFIG.DEFAULT,
+        approvalThresholds: {
+          autoApprove: APPROVAL_THRESHOLDS.AUTO_APPROVE,
+          manager: APPROVAL_THRESHOLDS.MANAGER,
+          financeManager: APPROVAL_THRESHOLDS.FINANCE_MANAGER,
+          cfo: APPROVAL_THRESHOLDS.CFO,
+        },
+        budgetAlerts: {
+          warningThreshold: BUDGET_THRESHOLDS.WARNING,
+          criticalThreshold: BUDGET_THRESHOLDS.CRITICAL,
+        },
+      },
+      ai: {
+        configuredProviders: aiProviders,
+        providerCount: aiProviders.length,
+      },
+      security: {
+        sessionTimeout: envInfo.sessionTimeout || 30,
+        hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
+      },
+      database: {
+        hasConnectionString: !!process.env.DATABASE_URL,
+        hasLocalDatabase: !!process.env.LOCAL_DATABASE_URL,
+      },
+      storage: {
+        hasS3: !!(process.env.S3_BUCKET_NAME && process.env.S3_ACCESS_KEY_ID),
+        hasRedis: !!process.env.REDIS_URL,
+      },
+      email: {
+        configured: !!(process.env.EMAIL_SERVER && process.env.EMAIL_USER),
+      },
+    }
+
+    return NextResponse.json({
+      success: true,
+      settings,
+      message: 'Settings are configured via environment variables. Update your .env file or Railway dashboard to change.',
     })
-
-    // Mask secret values
-    const maskedSettings = settings.map((setting) => ({
-      ...setting,
-      value: setting.isSecret ? '********' : setting.value,
-    }))
-
-    return NextResponse.json({ settings: maskedSettings })
   } catch (error) {
     console.error('Error fetching settings:', error)
     return NextResponse.json(
@@ -45,96 +87,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create or update settings
+// POST - Inform about configuration method
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    if (session.user.role !== 'ADMIN') {
+    if (!session?.user || session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const { settings } = body
-
-    if (!Array.isArray(settings)) {
-      return NextResponse.json(
-        { error: 'Settings must be an array' },
-        { status: 400 }
-      )
-    }
-
-    const results = await Promise.all(
-      settings.map(async (setting: {
-        key: string
-        value: unknown
-        category: string
-        description?: string
-        isSecret?: boolean
-      }) => {
-        return prisma.systemSettings.upsert({
-          where: { key: setting.key },
-          update: {
-            value: setting.value as object,
-            category: setting.category,
-            description: setting.description,
-            isSecret: setting.isSecret ?? false,
-          },
-          create: {
-            key: setting.key,
-            value: setting.value as object,
-            category: setting.category,
-            description: setting.description,
-            isSecret: setting.isSecret ?? false,
-          },
-        })
-      })
-    )
-
-    return NextResponse.json({ success: true, count: results.length })
+    return NextResponse.json({
+      success: false,
+      message: 'Settings are managed via environment variables. Please update your .env file or Railway dashboard variables.',
+      documentation: 'See DEPLOYMENT_GUIDE.md for configuration instructions',
+    }, { status: 400 })
   } catch (error) {
-    console.error('Error saving settings:', error)
+    console.error('Error with settings action:', error)
     return NextResponse.json(
-      { error: 'Failed to save settings' },
-      { status: 500 }
-    )
-  }
-}
-
-// DELETE - Delete a setting
-export async function DELETE(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    if (session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const key = searchParams.get('key')
-
-    if (!key) {
-      return NextResponse.json(
-        { error: 'Setting key is required' },
-        { status: 400 }
-      )
-    }
-
-    await prisma.systemSettings.delete({
-      where: { key },
-    })
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Error deleting setting:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete setting' },
+      { error: 'Failed to process request' },
       { status: 500 }
     )
   }
