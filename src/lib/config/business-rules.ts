@@ -3,7 +3,7 @@
  * Centralized configuration for business logic with environment variable support
  */
 
-import { getEnv } from './env-validator'
+import { getEnv } from '../env-validator'
 
 /**
  * Budget approval thresholds in KWD

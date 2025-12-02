@@ -36,7 +36,8 @@ function getClientIp(request: NextRequest): string {
   if (forwarded) return forwarded.split(',')[0].trim()
   if (real) return real
 
-  return request.ip || '127.0.0.1'
+  // NextRequest doesn't have .ip property, fallback to localhost
+  return '127.0.0.1'
 }
 
 /**

@@ -155,8 +155,9 @@ export function requirePermission(
   }
 
   if (!hasPermission(session, resource, action)) {
+    const allowedRoles = PERMISSIONS[resource][action as keyof typeof PERMISSIONS[typeof resource]]
     throw new InsufficientPermissionsError(
-      PERMISSIONS[resource][action as keyof typeof PERMISSIONS[typeof resource]] as UserRole[],
+      [...allowedRoles] as UserRole[],
       session.user.role
     )
   }

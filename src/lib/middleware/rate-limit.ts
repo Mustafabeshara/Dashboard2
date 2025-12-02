@@ -96,7 +96,8 @@ const rateLimiter = new InMemoryRateLimiter()
  */
 function defaultKeyGenerator(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for')
-  const ip = forwarded ? forwarded.split(',')[0].trim() : request.ip || '127.0.0.1'
+  const realIp = request.headers.get('x-real-ip')
+  const ip = forwarded ? forwarded.split(',')[0].trim() : (realIp || '127.0.0.1')
   return `ratelimit:${ip}`
 }
 
