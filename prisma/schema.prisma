@@ -762,3 +762,57 @@ enum SupplierCategory {
   FURNITURE
   OTHER
 }
+
+// ==================== SYSTEM CONFIGURATION ====================
+
+model SystemSettings {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  category    String   // 'general', 'approval', 'notification', 'appearance'
+  description String?
+  isSecret    Boolean  @default(false) @map("is_secret")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
+model ExtractionTemplate {
+  id             String         @id @default(uuid())
+  name           String
+  type           ExtractionType
+  description    String?
+  promptTemplate String         @db.Text @map("prompt_template")
+  outputSchema   Json           @map("output_schema") // JSON Schema for expected output
+  fieldMappings  Json           @map("field_mappings") // Maps extracted fields to database fields
+  isActive       Boolean        @default(true) @map("is_active")
+  isDefault      Boolean        @default(false) @map("is_default")
+  version        Int            @default(1)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  createdById    String?        @map("created_by")
+
+  @@map("extraction_templates")
+}
+
+model AIProviderConfig {
+  id           String   @id @default(uuid())
+  provider     String   // 'groq', 'gemini', 'anthropic', 'openai', 'google_ai'
+  name         String   // Display name
+  apiKey       String?  @map("api_key") // Encrypted in production
+  model        String   // Model identifier
+  priority     Int      @default(1) // Lower = higher priority
+  isEnabled    Boolean  @default(true) @map("is_enabled")
+  rateLimit    Int?     @map("rate_limit") // Requests per minute
+  dailyLimit   Int?     @map("daily_limit") // Requests per day
+  usageCount   Int      @default(0) @map("usage_count")
+  lastUsed     DateTime? @map("last_used")
+  capabilities Json?    // ['vision', 'arabic', 'extraction', etc.]
+  config       Json?    // Additional provider-specific config
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, model])
+  @@map("ai_provider_configs")
+}
