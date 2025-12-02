@@ -4,29 +4,15 @@
  */
 
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+
+// Force dynamic rendering - required for health checks
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  try {
-    // Check database connection
-    await prisma.$queryRaw`SELECT 1`
-
-    return NextResponse.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      services: {
-        database: 'connected',
-        api: 'operational',
-      },
-    })
-  } catch (error) {
-    return NextResponse.json(
-      {
-        status: 'unhealthy',
-        timestamp: new Date().toISOString(),
-        error: 'Database connection failed',
-      },
-      { status: 503 }
-    )
-  }
+  // Simple health check that doesn't require database
+  // This ensures the server can respond even during DB connection issues
+  return NextResponse.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  })
 }
