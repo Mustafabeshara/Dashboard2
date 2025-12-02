@@ -223,15 +223,22 @@ export default function SettingsPage() {
       const response = await fetch('/api/admin/api-keys')
       if (!response.ok) {
         if (response.status === 403) {
-          // Non-admin can still view settings
+          // Non-admin user - show message that they can't manage API keys
+          setError('API Key management requires Admin or CEO role')
+          return
+        }
+        if (response.status === 401) {
+          setError('Please log in to manage API keys')
           return
         }
         throw new Error('Failed to load API keys')
       }
       const data = await response.json()
       setApiKeys(data.settings)
+      setError(null) // Clear any previous errors
     } catch (err) {
       console.error('API keys fetch error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load API keys')
     }
   }
 
@@ -285,8 +292,10 @@ export default function SettingsPage() {
         body: JSON.stringify({ key, value })
       })
       
+      const data = await response.json()
+      
       if (!response.ok) {
-        throw new Error('Failed to save API key')
+        throw new Error(data.error || `Failed to save API key (${response.status})`)
       }
       
       setSuccess('API key saved successfully')

@@ -4,7 +4,7 @@
  * Supports Gemini (with file_url for PDFs) and Groq
  */
 
-import { getForgeApiKey, getGroqApiKey } from './api-keys'
+import { getForgeApiKey, getGroqApiKey, getGeminiApiKey } from './api-keys'
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -276,30 +276,170 @@ const normalizeResponseFormat = ({
 };
 
 /**
- * Get Forge API configuration - now async to support database keys
+ * Get API configuration - tries Gemini first, then Forge, then OpenAI
  */
-const getForgeConfig = async (): Promise<{ apiKey: string; apiUrl: string }> => {
-  // Try to get from database first, then fall back to env
-  const apiKey = await getForgeApiKey() || process.env.FORGE_API_KEY || process.env.OPENAI_API_KEY;
+const getGeminiConfig = async (): Promise<{ apiKey: string; apiUrl: string; useGoogleApi: boolean }> => {
+  // First try Google's Gemini API directly
+  const geminiKey = await getGeminiApiKey() || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
+  
+  // Check if it's a real key (not placeholder)
+  if (geminiKey && !geminiKey.includes('your-') && geminiKey.length > 20) {
+    return {
+      apiKey: geminiKey,
+      apiUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      useGoogleApi: true
+    };
+  }
+
+  // Fall back to Forge/OpenAI compatible API
+  const forgeKey = await getForgeApiKey() || process.env.FORGE_API_KEY || process.env.OPENAI_API_KEY;
   const apiUrl = process.env.FORGE_API_URL || process.env.OPENAI_API_BASE;
 
-  if (!apiKey) {
-    throw new Error("No AI API key configured. Please set FORGE_API_KEY, OPENAI_API_KEY, or configure via Admin > API Keys.");
+  if (!forgeKey) {
+    throw new Error("No AI API key configured. Please set GEMINI_API_KEY, GROQ_API_KEY, or configure via Settings > AI Provider API Keys.");
   }
 
   const resolvedUrl = apiUrl && apiUrl.trim().length > 0
     ? `${apiUrl.replace(/\/$/, "")}/v1/chat/completions`
     : "https://forge.manus.im/v1/chat/completions";
 
-  return { apiKey, apiUrl: resolvedUrl };
+  return { apiKey: forgeKey, apiUrl: resolvedUrl, useGoogleApi: false };
 };
 
 /**
- * Invoke Gemini via Forge API
+ * Convert messages to Google Gemini format
+ */
+function convertToGeminiFormat(messages: Message[]): { contents: unknown[]; systemInstruction?: unknown } {
+  const contents: unknown[] = [];
+  let systemInstruction: unknown = undefined;
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemInstruction = { parts: [{ text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content) }] };
+      continue;
+    }
+
+    const parts: unknown[] = [];
+    const contentArray = Array.isArray(msg.content) ? msg.content : [msg.content];
+
+    for (const content of contentArray) {
+      if (typeof content === 'string') {
+        parts.push({ text: content });
+      } else if (content.type === 'text') {
+        parts.push({ text: content.text });
+      } else if (content.type === 'image_url') {
+        // For images, extract base64 data
+        const url = content.image_url.url;
+        if (url.startsWith('data:')) {
+          const [header, base64Data] = url.split(',');
+          const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+          parts.push({ inlineData: { mimeType, data: base64Data } });
+        } else {
+          parts.push({ text: `[Image: ${url}]` });
+        }
+      } else if (content.type === 'file_url') {
+        // For files/PDFs - use file URI
+        parts.push({ 
+          fileData: { 
+            mimeType: content.file_url.mime_type || 'application/pdf',
+            fileUri: content.file_url.url 
+          } 
+        });
+      }
+    }
+
+    contents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts
+    });
+  }
+
+  return { contents, systemInstruction };
+}
+
+/**
+ * Invoke Google's Gemini API directly
+ */
+async function invokeGoogleGemini(params: InvokeParams, apiKey: string): Promise<InvokeResult> {
+  const { messages, outputSchema, output_schema, responseFormat, response_format } = params;
+  
+  const { contents, systemInstruction } = convertToGeminiFormat(messages);
+  
+  const payload: Record<string, unknown> = {
+    contents,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+    }
+  };
+
+  if (systemInstruction) {
+    payload.systemInstruction = systemInstruction;
+  }
+
+  // Handle JSON response format
+  const format = responseFormat || response_format;
+  const schema = outputSchema || output_schema;
+  if (format?.type === 'json_object' || format?.type === 'json_schema' || schema) {
+    payload.generationConfig = {
+      ...payload.generationConfig as Record<string, unknown>,
+      responseMimeType: 'application/json',
+    };
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API error: ${response.status} ${response.statusText} – ${errorText}`);
+  }
+
+  const data = await response.json();
+  
+  // Convert Google's response to OpenAI-compatible format
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  
+  return {
+    id: `gemini-${Date.now()}`,
+    object: 'chat.completion',
+    created: Math.floor(Date.now() / 1000),
+    model: 'gemini-1.5-flash',
+    choices: [{
+      index: 0,
+      message: { role: 'assistant', content },
+      finish_reason: data.candidates?.[0]?.finishReason || 'stop',
+    }],
+    usage: {
+      prompt_tokens: data.usageMetadata?.promptTokenCount || 0,
+      completion_tokens: data.usageMetadata?.candidatesTokenCount || 0,
+      total_tokens: data.usageMetadata?.totalTokenCount || 0,
+    },
+  };
+}
+
+/**
+ * Invoke Gemini - uses Google API directly if GEMINI_API_KEY is set, otherwise Forge
  * Supports direct PDF processing via file_url
  */
 export async function invokeGemini(params: InvokeParams): Promise<InvokeResult> {
-  const { apiKey, apiUrl } = await getForgeConfig();
+  const config = await getGeminiConfig();
+  
+  // If using Google's native API
+  if (config.useGoogleApi) {
+    console.log('[LLM] Using Google Gemini API directly');
+    return invokeGoogleGemini(params, config.apiKey);
+  }
+
+  // Otherwise use Forge/OpenAI compatible API
+  console.log('[LLM] Using Forge API for Gemini');
+  const { apiKey, apiUrl } = config;
 
   const {
     messages,
