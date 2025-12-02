@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getGroqApiKey, getGeminiApiKey, getOpenAIApiKey, getForgeApiKey } from '@/lib/ai/api-keys'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -16,12 +17,15 @@ interface ServiceStatus {
   latency?: number
   message?: string
   details?: Record<string, unknown>
+  source?: 'database' | 'environment'
 }
 
 async function testGroq(): Promise<ServiceStatus> {
-  const apiKey = process.env.GROQ_API_KEY
+  const apiKey = await getGroqApiKey() || process.env.GROQ_API_KEY
+  const source = (await getGroqApiKey()) ? 'database' : 'environment'
+  
   if (!apiKey) {
-    return { name: 'Groq', status: 'not_configured', message: 'GROQ_API_KEY not set' }
+    return { name: 'Groq', status: 'not_configured', message: 'GROQ_API_KEY not set. Configure via Admin > API Keys.' }
   }
 
   const start = Date.now()
@@ -39,14 +43,16 @@ async function testGroq(): Promise<ServiceStatus> {
         status: 'ok',
         latency,
         message: 'Connected successfully',
-        details: { models: data.data?.length || 0 }
+        details: { models: data.data?.length || 0 },
+        source
       }
     } else {
       return {
         name: 'Groq',
         status: 'error',
         latency,
-        message: `HTTP ${response.status}: ${response.statusText}`
+        message: `HTTP ${response.status}: ${response.statusText}`,
+        source
       }
     }
   } catch (error) {
@@ -54,15 +60,18 @@ async function testGroq(): Promise<ServiceStatus> {
       name: 'Groq',
       status: 'error',
       latency: Date.now() - start,
-      message: error instanceof Error ? error.message : 'Connection failed'
+      message: error instanceof Error ? error.message : 'Connection failed',
+      source
     }
   }
 }
 
 async function testGemini(): Promise<ServiceStatus> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
+  const apiKey = await getGeminiApiKey() || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY
+  const source = (await getGeminiApiKey()) ? 'database' : 'environment'
+  
   if (!apiKey) {
-    return { name: 'Gemini', status: 'not_configured', message: 'GEMINI_API_KEY not set' }
+    return { name: 'Gemini', status: 'not_configured', message: 'GEMINI_API_KEY not set. Configure via Admin > API Keys.' }
   }
 
   const start = Date.now()
@@ -80,7 +89,8 @@ async function testGemini(): Promise<ServiceStatus> {
         status: 'ok',
         latency,
         message: 'Connected successfully',
-        details: { models: data.models?.length || 0 }
+        details: { models: data.models?.length || 0 },
+        source
       }
     } else {
       const errorData = await response.json().catch(() => ({}))
@@ -88,7 +98,8 @@ async function testGemini(): Promise<ServiceStatus> {
         name: 'Gemini',
         status: 'error',
         latency,
-        message: errorData.error?.message || `HTTP ${response.status}`
+        message: errorData.error?.message || `HTTP ${response.status}`,
+        source
       }
     }
   } catch (error) {
@@ -96,7 +107,8 @@ async function testGemini(): Promise<ServiceStatus> {
       name: 'Gemini',
       status: 'error',
       latency: Date.now() - start,
-      message: error instanceof Error ? error.message : 'Connection failed'
+      message: error instanceof Error ? error.message : 'Connection failed',
+      source
     }
   }
 }

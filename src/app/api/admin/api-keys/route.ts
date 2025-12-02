@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto'
+import { clearApiKeyCache } from '@/lib/ai/api-keys'
 
 // Encryption helpers using AES-256-GCM
 const ENCRYPTION_KEY = process.env.NEXTAUTH_SECRET || 'fallback-key-for-development-only'
@@ -171,6 +172,9 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Clear the API key cache so new key is used immediately
+    clearApiKeyCache()
+
     return NextResponse.json({ 
       success: true, 
       message: 'API key saved',
@@ -201,6 +205,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     await prisma.appSettings.deleteMany({ where: { key } })
+
+    // Clear the API key cache
+    clearApiKeyCache()
 
     return NextResponse.json({ success: true, message: 'API key removed' })
   } catch (error) {

@@ -1,0 +1,192 @@
+/**
+ * API Keys Loader
+ * Loads encrypted API keys from database and caches them
+ * Falls back to environment variables if database keys not available
+ */
+
+import prisma from '@/lib/prisma'
+import { createDecipheriv, scryptSync } from 'crypto'
+
+// Cache for API keys to avoid repeated database calls
+let apiKeyCache: Map<string, string> | null = null
+let cacheTimestamp: number = 0
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+// Encryption config (must match api-keys route.ts)
+const ENCRYPTION_KEY = process.env.NEXTAUTH_SECRET || 'fallback-key-for-development-only'
+const ALGORITHM = 'aes-256-gcm'
+
+function getKey(): Buffer {
+  return scryptSync(ENCRYPTION_KEY, 'salt', 32)
+}
+
+function decrypt(encryptedData: string): string {
+  try {
+    const parts = encryptedData.split(':')
+    if (parts.length !== 3) return ''
+    
+    const [ivHex, authTagHex, encrypted] = parts
+    
+    const iv = Buffer.from(ivHex, 'hex')
+    const authTag = Buffer.from(authTagHex, 'hex')
+    const key = getKey()
+    
+    const decipher = createDecipheriv(ALGORITHM, key, iv)
+    decipher.setAuthTag(authTag)
+    
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8')
+    decrypted += decipher.final('utf8')
+    
+    return decrypted
+  } catch (error) {
+    console.error('Failed to decrypt API key:', error)
+    return ''
+  }
+}
+
+/**
+ * Load all API keys from database and cache them
+ */
+async function loadApiKeysFromDatabase(): Promise<Map<string, string>> {
+  const keys = new Map<string, string>()
+  
+  try {
+    const settings = await prisma.appSettings.findMany({
+      where: {
+        key: {
+          in: [
+            'GROQ_API_KEY',
+            'GEMINI_API_KEY',
+            'OPENAI_API_KEY',
+            'ANTHROPIC_API_KEY',
+            'FORGE_API_KEY',
+            'AWS_ACCESS_KEY_ID',
+            'AWS_SECRET_ACCESS_KEY',
+            'AWS_REGION',
+          ]
+        }
+      }
+    })
+    
+    for (const setting of settings) {
+      const value = setting.isEncrypted ? decrypt(setting.value) : setting.value
+      if (value) {
+        keys.set(setting.key, value)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load API keys from database:', error)
+  }
+  
+  return keys
+}
+
+/**
+ * Get API key by name - checks database first, then environment variables
+ */
+export async function getApiKey(keyName: string): Promise<string | null> {
+  // Check if cache is still valid
+  const now = Date.now()
+  if (!apiKeyCache || now - cacheTimestamp > CACHE_TTL) {
+    apiKeyCache = await loadApiKeysFromDatabase()
+    cacheTimestamp = now
+  }
+  
+  // First check database cache
+  const dbValue = apiKeyCache.get(keyName)
+  if (dbValue && dbValue.length > 0) {
+    return dbValue
+  }
+  
+  // Fall back to environment variable
+  const envValue = process.env[keyName]
+  
+  // Don't return placeholder values
+  if (envValue && !envValue.includes('your-') && !envValue.includes('-key')) {
+    return envValue
+  }
+  
+  return null
+}
+
+/**
+ * Get Groq API key
+ */
+export async function getGroqApiKey(): Promise<string | null> {
+  return getApiKey('GROQ_API_KEY')
+}
+
+/**
+ * Get Gemini API key
+ */
+export async function getGeminiApiKey(): Promise<string | null> {
+  return getApiKey('GEMINI_API_KEY')
+}
+
+/**
+ * Get Forge API key (for Gemini via Forge)
+ */
+export async function getForgeApiKey(): Promise<string | null> {
+  const forgeKey = await getApiKey('FORGE_API_KEY')
+  if (forgeKey) return forgeKey
+  
+  return getApiKey('OPENAI_API_KEY')
+}
+
+/**
+ * Get OpenAI API key
+ */
+export async function getOpenAIApiKey(): Promise<string | null> {
+  return getApiKey('OPENAI_API_KEY')
+}
+
+/**
+ * Check if any AI provider is configured
+ */
+export async function isAnyProviderConfigured(): Promise<boolean> {
+  const [groq, gemini, openai, forge] = await Promise.all([
+    getGroqApiKey(),
+    getGeminiApiKey(),
+    getOpenAIApiKey(),
+    getForgeApiKey(),
+  ])
+  
+  return !!(groq || gemini || openai || forge)
+}
+
+/**
+ * Get all configured providers
+ */
+export async function getConfiguredProviders(): Promise<string[]> {
+  const providers: string[] = []
+  
+  if (await getGroqApiKey()) providers.push('groq')
+  if (await getGeminiApiKey()) providers.push('gemini')
+  if (await getOpenAIApiKey()) providers.push('openai')
+  if (await getForgeApiKey()) providers.push('forge')
+  
+  return providers
+}
+
+/**
+ * Clear the API key cache (useful after updating keys)
+ */
+export function clearApiKeyCache(): void {
+  apiKeyCache = null
+  cacheTimestamp = 0
+}
+
+/**
+ * Get AWS credentials
+ */
+export async function getAWSCredentials(): Promise<{
+  accessKeyId: string | null
+  secretAccessKey: string | null
+  region: string | null
+}> {
+  return {
+    accessKeyId: await getApiKey('AWS_ACCESS_KEY_ID'),
+    secretAccessKey: await getApiKey('AWS_SECRET_ACCESS_KEY'),
+    region: await getApiKey('AWS_REGION'),
+  }
+}

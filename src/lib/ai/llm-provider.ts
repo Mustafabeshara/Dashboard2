@@ -4,6 +4,8 @@
  * Supports Gemini (with file_url for PDFs) and Groq
  */
 
+import { getForgeApiKey, getGroqApiKey } from './api-keys'
+
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
 export type TextContent = {
@@ -274,14 +276,15 @@ const normalizeResponseFormat = ({
 };
 
 /**
- * Get Forge API configuration
+ * Get Forge API configuration - now async to support database keys
  */
-const getForgeConfig = () => {
-  const apiKey = process.env.FORGE_API_KEY || process.env.OPENAI_API_KEY;
+const getForgeConfig = async (): Promise<{ apiKey: string; apiUrl: string }> => {
+  // Try to get from database first, then fall back to env
+  const apiKey = await getForgeApiKey() || process.env.FORGE_API_KEY || process.env.OPENAI_API_KEY;
   const apiUrl = process.env.FORGE_API_URL || process.env.OPENAI_API_BASE;
 
   if (!apiKey) {
-    throw new Error("FORGE_API_KEY or OPENAI_API_KEY is not configured");
+    throw new Error("No AI API key configured. Please set FORGE_API_KEY, OPENAI_API_KEY, or configure via Admin > API Keys.");
   }
 
   const resolvedUrl = apiUrl && apiUrl.trim().length > 0
@@ -296,7 +299,7 @@ const getForgeConfig = () => {
  * Supports direct PDF processing via file_url
  */
 export async function invokeGemini(params: InvokeParams): Promise<InvokeResult> {
-  const { apiKey, apiUrl } = getForgeConfig();
+  const { apiKey, apiUrl } = await getForgeConfig();
 
   const {
     messages,
@@ -362,10 +365,11 @@ export async function invokeGemini(params: InvokeParams): Promise<InvokeResult> 
 }
 
 /**
- * Check if Groq is configured
+ * Check if Groq is configured - now async to support database keys
  */
-export function isGroqConfigured(): boolean {
-  return !!process.env.GROQ_API_KEY;
+export async function isGroqConfigured(): Promise<boolean> {
+  const apiKey = await getGroqApiKey()
+  return !!apiKey
 }
 
 /**
@@ -374,9 +378,9 @@ export function isGroqConfigured(): boolean {
 export async function invokeGroq(
   params: InvokeParams & { model?: string }
 ): Promise<InvokeResult> {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = await getGroqApiKey() || process.env.GROQ_API_KEY
   if (!apiKey) {
-    throw new Error("GROQ_API_KEY is not configured");
+    throw new Error("GROQ_API_KEY is not configured. Please configure via Admin > API Keys.");
   }
 
   const {
@@ -440,9 +444,9 @@ export interface LLMConfig {
 }
 
 /**
- * Get recommended provider for a specific task
+ * Get recommended provider for a specific task - now async
  */
-export function getRecommendedProvider(taskType: "pdf" | "image" | "text"): LLMProvider {
+export async function getRecommendedProvider(taskType: "pdf" | "image" | "text"): Promise<LLMProvider> {
   switch (taskType) {
     case "pdf":
       // Gemini has better PDF support with file_url
@@ -450,7 +454,7 @@ export function getRecommendedProvider(taskType: "pdf" | "image" | "text"): LLMP
     case "image":
     case "text":
       // Groq is faster for images and text
-      return isGroqConfigured() ? LLMProvider.GROQ : LLMProvider.GEMINI;
+      return (await isGroqConfigured()) ? LLMProvider.GROQ : LLMProvider.GEMINI;
     default:
       return LLMProvider.GEMINI;
   }
@@ -468,7 +472,7 @@ export async function invokeUnifiedLLM(
 
   try {
     if (provider === LLMProvider.GROQ) {
-      if (!isGroqConfigured()) {
+      if (!(await isGroqConfigured())) {
         console.warn("Groq not configured, falling back to Gemini");
         return await invokeGemini(params);
       }

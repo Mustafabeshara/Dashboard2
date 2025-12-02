@@ -212,8 +212,8 @@ export async function extractTenderFromDocument(
       }
     : { type: 'image_url' as const, image_url: { url: fileUrl } };
 
-  // Determine recommended provider based on file type
-  const provider = isPdf ? LLMProvider.GEMINI : getRecommendedProvider('image');
+  // Determine recommended provider based on file type (now async)
+  const provider = isPdf ? LLMProvider.GEMINI : await getRecommendedProvider('image');
   console.log(`[ExtractTender] Using provider: ${provider}`);
 
   // Retry mechanism

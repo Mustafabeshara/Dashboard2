@@ -29,6 +29,7 @@ import {
   CheckCircle,
   FolderOpen,
   Sparkles,
+  TrendingUp,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -123,6 +124,12 @@ const navItems: NavItem[] = [
     href: '/suppliers',
     icon: <ShoppingCart className="h-5 w-5" />,
     roles: ['ADMIN', 'WAREHOUSE', 'MANAGER'],
+  },
+  {
+    title: 'Forecasts',
+    href: '/forecasts',
+    icon: <TrendingUp className="h-5 w-5" />,
+    roles: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'],
   },
   {
     title: 'Reports',
