@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Settings, FileText, Brain, Users, Shield, Database } from 'lucide-react'
+import { Settings, FileText, Brain, Users, Shield, Database, Lock } from 'lucide-react'
 
 export default function AdminPage() {
   const { data: session, status } = useSession()
@@ -40,6 +40,13 @@ export default function AdminPage() {
       href: '/admin/settings',
       icon: Settings,
       color: 'text-blue-500',
+    },
+    {
+      title: 'Role Permissions',
+      description: 'View and manage role-based access control and permissions matrix',
+      href: '/admin/permissions',
+      icon: Lock,
+      color: 'text-pink-500',
     },
     {
       title: 'Extraction Templates',
