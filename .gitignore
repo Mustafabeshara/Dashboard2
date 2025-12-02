@@ -48,6 +48,29 @@ next-env.d.ts
 
 /src/generated/prisma
 
+# Backup files
+*.backup
+*.bak
+*~
+
+# Temporary/test files
+*-test.js
+test-*.js
+demo-*.js
+seed-local-*.js
+cookies.txt
+
+# Fix scripts (should be one-time use)
+fix-*.sh
+fix_*.py
+
+# Build artifacts
+electron-test-screenshot.png
+*.command
+
+# macOS app bundles (use releases instead)
+*.app/
+
 # Electron specific
 electron-dist/
 electron-build/

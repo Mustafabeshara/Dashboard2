@@ -4,9 +4,32 @@ A comprehensive web-based management system for medical device distribution comp
 
 Built for **Beshara Group - Healthcare Solutions Division** in Kuwait.
 
-## 📱 Desktop Application Available
+## 📱 Hybrid Architecture: Web + Desktop
 
-This application is now available as a **desktop application** with full offline capabilities and enhanced AI features. See [README_DESKTOP.md](README_DESKTOP.md) for details on the desktop version.
+This system is available in **two deployment modes**:
+
+### 🌐 Web Application (PostgreSQL)
+- Cloud-hosted on Railway/Vercel
+- Multi-user collaboration
+- Centralized data management
+- Access from any device with a browser
+
+### 💻 Desktop Application (SQLite + Electron)
+- **Offline-First**: Full functionality without internet
+- **AI-Powered Document Processing**: Multi-provider LLM support (Gemini, Groq, Google AI, Anthropic)
+- **Native System Integration**: File system access, notifications, system tray
+- **Local Database**: SQLite with automatic sync to cloud (when online)
+- **Enhanced Performance**: Optimized for desktop hardware
+- **Cross-Platform**: Available for macOS, Windows, and Linux
+
+#### Desktop-Specific Features
+- PDF text extraction with 99% accuracy using pdf-parse
+- OCR support for scanned documents (AWS Textract, Google Vision)
+- AI-powered tender data extraction with validation
+- Document preprocessing and normalization
+- Batch processing queue with progress tracking
+- Multi-window support for parallel work
+- Native keyboard shortcuts and system integration
 
 ## Features
 
@@ -41,12 +64,26 @@ This application is now available as a **desktop application** with full offline
 - Invoice Management
 - Audit Logging
 
-### 🤖 AI-Powered Features (Desktop Only)
-- **PDF Text Extraction**: Advanced PDF parsing with 99% accuracy
-- **OCR Support**: Optical Character Recognition for scanned documents
-- **Intelligent Extraction**: AI-powered data extraction using multiple LLMs
-- **Data Validation**: Zod schema validation for extracted data quality
-- **Document Processing Queue**: Batch processing with progress tracking
+## Tech Stack
+
+### Frontend
+- **Framework**: Next.js 16 with App Router
+- **UI**: Tailwind CSS with shadcn/ui components
+- **Type Safety**: TypeScript with strict mode
+- **State**: React hooks + Zustand (desktop)
+
+### Backend
+- **Web**: Next.js API routes with PostgreSQL
+- **Desktop**: Electron + SQLite with Node.js
+- **ORM**: Prisma (dual schema: web + local)
+- **Authentication**: NextAuth.js with JWT
+- **Validation**: Zod schemas
+
+### AI/ML (Desktop)
+- **LLM Providers**: Gemini, Groq, Google AI, Anthropic (fallback chain)
+- **Document Processing**: pdf-parse, Sharp
+- **OCR**: AWS Textract, Google Vision API
+- **Validation**: Zod-based schema validation
 
 ## Tech Stack
 
@@ -206,6 +243,68 @@ src/
 - `POST /api/transactions` - Create transaction
 - `POST /api/transactions/:id/approve` - Approve transaction
 
+## Desktop Application IPC API
+
+The desktop app uses Electron IPC for communication between renderer and main process:
+
+### Database Operations
+```javascript
+// Generic database queries
+await window.electronAPI.invoke('db:query', { table: 'tenders', operation: 'findMany' })
+await window.electronAPI.invoke('db:initialize')
+```
+
+### AI Document Processing
+```javascript
+// Add document to processing queue
+await window.electronAPI.invoke('ai:add-to-queue', {
+  filePath: '/path/to/document.pdf',
+  type: 'tender'
+})
+
+// Get queue status
+const queue = await window.electronAPI.invoke('ai:get-queue')
+
+// Clear queue
+await window.electronAPI.invoke('ai:clear-queue')
+```
+
+### File System Access
+```javascript
+// Open file selection dialog
+const files = await window.electronAPI.invoke('fs:select-files', {
+  filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
+})
+
+// Read file content
+const content = await window.electronAPI.invoke('fs:read-file', filePath)
+```
+
+### Application Control
+```javascript
+// Get app info
+const info = await window.electronAPI.invoke('get-app-info')
+
+// Check connectivity
+const isOnline = await window.electronAPI.invoke('is-online')
+
+// Get sync status
+const syncStatus = await window.electronAPI.invoke('get-sync-status')
+```
+
+### Event Listeners
+```javascript
+// Listen for AI processing updates
+window.electronAPI.on('ai-queue-update', (data) => {
+  console.log('Processing:', data)
+})
+
+// Listen for sync events
+window.electronAPI.on('sync-complete', () => {
+  console.log('Sync completed')
+})
+```
+
 ## Business Rules
 
 ### Approval Thresholds
@@ -232,34 +331,115 @@ src/
 
 ## Development
 
+### Prerequisites
+- Node.js 20+
+- npm or yarn
+- PostgreSQL 14+ (for web deployment)
+- Python 3.x (for desktop builds)
+
 ### Available Scripts
 
 ```bash
-# Development server
+# Web Application Development
+npm run dev          # Start Next.js dev server (http://localhost:3000)
+npm run build        # Build for production
+npm start            # Start production server
+
+# Desktop Application
+npm run electron:dev           # Run Electron + Next.js in development
+npm run electron:build         # Build desktop app (current platform)
+npm run electron:builder:mac   # Build .dmg for macOS
+npm run electron:builder:win   # Build installer for Windows
+npm run electron:builder:linux # Build AppImage for Linux
+
+# Database Management
+npm run db:generate        # Generate Prisma client (web)
+npm run db:local:generate  # Generate Prisma client (desktop)
+npm run db:generate:all    # Generate both clients (REQUIRED before desktop builds)
+npm run db:push            # Push schema to PostgreSQL
+npm run db:local:push      # Push schema to SQLite
+npm run db:migrate         # Create migration
+npm run db:seed            # Seed sample data
+npm run db:local:studio    # Open Prisma Studio for SQLite
+
+# Quality Assurance
+npm run lint           # Run ESLint
+npm run test           # Run Jest tests
+npm run test:watch     # Run tests in watch mode
+npm run test:coverage  # Generate coverage report (70% threshold)
+npm run validate:env   # Validate environment variables
+```
+
+### Environment Setup
+
+#### Web Application (.env)
+```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/medical_dashboard"
+
+# NextAuth
+NEXTAUTH_SECRET="your-secret-key"
+NEXTAUTH_URL="http://localhost:3000"
+
+# Optional: Redis for caching
+REDIS_URL="redis://localhost:6379"
+```
+
+#### Desktop Application (.env.local)
+```env
+# Local SQLite Database
+LOCAL_DATABASE_URL="file:./local.db"
+
+# AI Providers (at least one required)
+GEMINI_API_KEY="your-gemini-key"
+GROQ_API_KEY="your-groq-key"
+GOOGLE_AI_API_KEY="your-google-ai-key"
+ANTHROPIC_API_KEY="your-anthropic-key"
+
+# OCR Services (optional)
+AWS_ACCESS_KEY_ID="your-aws-key"
+AWS_SECRET_ACCESS_KEY="your-aws-secret"
+AWS_REGION="us-east-1"
+GOOGLE_VISION_API_KEY="your-vision-key"
+
+# Email (optional)
+EMAIL_SERVER="smtp.example.com"
+EMAIL_PORT=587
+EMAIL_USER="noreply@example.com"
+EMAIL_PASSWORD="your-password"
+```
+
+### Quick Start
+
+#### Web Application
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Set up PostgreSQL database
+npm run db:push
+npm run db:seed
+
+# 3. Start development server
 npm run dev
+```
 
-# Build for production
-npm run build
+#### Desktop Application
+```bash
+# 1. Install dependencies
+npm install
 
-# Start production server
-npm start
+# 2. Generate both Prisma clients
+npm run db:generate:all
 
-# Run linting
-npm run lint
+# 3. Set up local database
+npm run db:local:push
 
-# Database commands
-npm run db:generate  # Generate Prisma client
-npm run db:push      # Push schema to database
-npm run db:migrate   # Run migrations
-npm run db:seed      # Seed sample data
+# 4. Run desktop app
+npm run electron:dev
 
-# Desktop application
-npm run electron:dev     # Run desktop app in development
-npm run electron:build   # Build desktop app for distribution
-
-# Testing
-npm run test         # Run tests
-npm run test:watch   # Run tests in watch mode
+# 5. Build desktop app (production)
+npm run electron:build
 ```
 
 ### Code Standards

@@ -3,8 +3,8 @@
  * Run with: npm run validate:env
  */
 
-import { validateEnv, getEnvironmentInfo, getEnabledProviders } from './src/lib/env-validator'
-import { validateAIProviders } from './src/lib/ai/config'
+import { validateEnv, getEnvironmentInfo, getEnabledProviders } from '@/lib/env-validator'
+import { validateAIProviders } from '@/lib/ai/config'
 
 console.log('🔍 Validating environment configuration...\n')
 
