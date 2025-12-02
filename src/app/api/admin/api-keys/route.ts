@@ -76,9 +76,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Only admins can view API keys
-    if (!['ADMIN', 'CEO'].includes(session.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    // Allow management roles to view API keys
+    const allowedRoles = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER']
+    if (!allowedRoles.includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden - requires management role' }, { status: 403 })
     }
 
     // Get all API key settings from database
@@ -133,9 +134,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Only admins can update API keys
-    if (!['ADMIN', 'CEO'].includes(session.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    // Allow management roles to update API keys
+    const allowedRoles = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER']
+    if (!allowedRoles.includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden - requires management role' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -193,8 +195,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!['ADMIN', 'CEO'].includes(session.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const allowedRoles = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER']
+    if (!allowedRoles.includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden - requires management role' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
