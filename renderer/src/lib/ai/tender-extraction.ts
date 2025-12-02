@@ -67,12 +67,20 @@ export function parseTenderExtractionResult(extractedText: string): TenderExtrac
     }
 
     // Return with default values if validation fails
+    // Note: Must include at least one item to satisfy schema validation
     return {
       reference: '',
       title: '',
       organization: '',
       closingDate: '',
-      items: [],
+      items: [{
+        description: 'Please enter item details manually',
+        quantity: 1,
+        unit: 'Each',
+        unitPrice: 0,
+        totalPrice: 0,
+        specifications: 'To be specified'
+      }],
       notes: 'Extraction failed. Please enter data manually.',
       confidence: {
         overall: 0.0,
@@ -104,7 +112,14 @@ export function parseTenderExtractionResult(extractedText: string): TenderExtrac
       title: '',
       organization: '',
       closingDate: '',
-      items: [],
+      items: [{
+        description: 'Please enter item details manually',
+        quantity: 1,
+        unit: 'Each',
+        unitPrice: 0,
+        totalPrice: 0,
+        specifications: 'To be specified'
+      }],
       notes: 'Extraction failed. Please enter data manually.',
       confidence: {
         overall: 0.0,

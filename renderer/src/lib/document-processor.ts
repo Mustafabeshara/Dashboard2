@@ -5,6 +5,33 @@
 
 import { logger } from './logger';
 
+/**
+ * Extract text from raw PDF buffer when pdf-parse is not available
+ * This provides basic text extraction as a fallback
+ */
+function extractTextFromRawBuffer(bufferString: string): string {
+  // Basic text extraction patterns for common PDF text encodings
+  // This is a fallback that tries to extract readable text from binary buffer
+
+  // Remove non-printable characters but keep spaces and basic punctuation
+  let text = bufferString.replace(/[^\x20-\x7E\n\r\t]/g, '')
+
+  // Clean up common PDF artifacts
+  text = text.replace(/BT\s*\/F\d+\s+\d+\s+Tf\s*[\d.]+\s+TL\s*[\d.]+\s+Tc\s*[\d.]+\s+Tw\s*[\d.]+\s+Tz\s*[\d.]+\s+TL/g, '')
+  text = text.replace(/\/F\d+\s+\d+\s+Tf/g, '')
+  text = text.replace(/\d+\.\d+\s+TL/g, '')
+
+  // Remove excessive whitespace
+  text = text.replace(/\s+/g, ' ').trim()
+
+  // If we get very little text, provide a helpful message
+  if (text.length < 50) {
+    return 'Unable to extract text from PDF. The document may be image-based or use an unsupported encoding. Please use the web interface for full PDF processing capabilities.'
+  }
+
+  return text
+}
+
 interface ProcessedDocument {
   text: string;
   images: string[]; // Array of image URLs
@@ -130,22 +157,53 @@ export async function extractTextFromBuffer(buffer: Buffer, mimeType: string): P
 async function extractTextFromPDF(buffer: Buffer): Promise<ProcessedDocument> {
   try {
     logger.info('Starting PDF text extraction', {
-      context: { 
+      context: {
         bufferSize: buffer.length,
         bufferType: typeof buffer
       }
     });
-    
-    // PDF parsing is not available in Electron desktop builds
-    // Return fallback data for desktop mode
-    logger.info('Using fallback PDF processing for desktop mode');
 
-    const pdfData = {
-      text: 'PDF parsing not available in desktop mode. Please use web interface for full PDF processing.',
-      numpages: 1,
-      info: { fallback: true, desktopMode: true }
-    };
-    
+    // Check if pdf-parse is available
+    let pdfParse: any
+    try {
+      pdfParse = require('pdf-parse')
+    } catch (importError) {
+      logger.warn('pdf-parse not available, using fallback extraction', {
+        context: { importError: importError instanceof Error ? importError.message : 'Unknown error' }
+      })
+
+      // Graceful degradation: Extract basic text patterns from buffer
+      const bufferString = buffer.toString('utf-8', 0, Math.min(10000, buffer.length))
+
+      const pdfData = {
+        text: extractTextFromRawBuffer(bufferString),
+        numpages: 1,
+        info: {
+          fallback: true,
+          reason: 'pdf-parse not available',
+          extractedChars: bufferString.length
+        }
+      };
+
+      logger.info('Fallback PDF text extraction completed', {
+        context: { extractedChars: pdfData.text.length, numpages: pdfData.numpages }
+      });
+
+      return {
+        content: pdfData.text,
+        metadata: {
+          pages: pdfData.numpages,
+          encoding: 'utf-8',
+          extractedWith: 'fallback',
+          fallbackReason: 'pdf-parse unavailable'
+        },
+        success: true
+      };
+    }
+
+    // Use pdf-parse if available
+    const pdfData = await pdfParse(buffer);
+
     logger.info('PDF text extraction completed', {
       context: {
         textLength: pdfData.text.length,

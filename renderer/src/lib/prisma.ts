@@ -104,11 +104,14 @@ function getPrismaClientSync(): PrismaClient {
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     })
   } catch (error) {
-    console.warn('Failed to initialize Prisma Client:', error)
-    // Return a no-op client that will throw on use
-    // In Electron mode, this shouldn't be used anyway
-    prismaInstance = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    console.error('Failed to initialize Prisma Client:', error)
+    // Create a proxy that throws meaningful errors instead of failing silently
+    prismaInstance = new Proxy({} as PrismaClient, {
+      get(target, prop) {
+        return () => {
+          throw new Error(`Prisma Client not available: ${error instanceof Error ? error.message : 'Unknown error'}. This may indicate a database connection issue.`)
+        }
+      }
     })
   }
 

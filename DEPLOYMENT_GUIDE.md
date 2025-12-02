@@ -1,30 +1,56 @@
-# Dashboard2 Deployment Guide
+# 🚀 Medical Distribution Management System - Deployment Guide
 
-Complete guide for deploying Dashboard2 with Electron desktop app and Railway backend.
-
----
-
-## Architecture Overview
-
-Dashboard2 uses a hybrid architecture:
-- **Desktop Application**: Electron-based desktop app with local SQLite database
-- **Backend API**: Next.js application deployed on Railway with PostgreSQL
-- **Document Storage**: AWS S3 for file uploads and documents
-- **AI Services**: Google Gemini and Groq for tender extraction
+Complete deployment guide for your hybrid desktop/web application with multiple deployment options.
 
 ---
 
-## Prerequisites
+## 🎯 Architecture Overview
 
-- Node.js 22+ installed
-- Railway account (for backend deployment)
-- AWS S3 bucket (for document storage)
-- SMTP credentials (for email notifications)
-- Google Gemini API key and Groq API key
+Your application uses a **hybrid architecture** with multiple deployment options:
+
+### **Option A: Desktop Application (Recommended)**
+- **Framework**: Nextron (Next.js + Electron)
+- **Database**: Local SQLite database
+- **Deployment**: Native desktop apps (.dmg, .exe, .AppImage)
+- **Best for**: Enterprise users, offline-first scenarios
+
+### **Option B: Web Application**
+- **Framework**: Next.js with static export
+- **Database**: PostgreSQL (Railway/Supabase/Vercel)
+- **Deployment**: Vercel, Netlify, Railway, or any static host
+- **Best for**: Cloud deployment, multi-user access
+
+### **Option C: Hybrid Deployment**
+- **Both desktop and web** deployments available
+- **Users choose** their preferred experience
+- **Maximum flexibility** for different use cases
 
 ---
 
-## Part 1: Railway Backend Deployment
+## 📋 Prerequisites
+
+- Node.js 20.9.0+ installed
+- Git repository access
+- For web deployment: Cloud platform account (Vercel/Netlify/Railway)
+- For desktop: Build machine for target platforms
+
+---
+
+## 🎯 Choose Your Deployment Strategy
+
+### Quick Decision Guide:
+
+| Scenario | Recommended | Why |
+|----------|-------------|-----|
+| **Enterprise Software** | Desktop App | Offline-first, native experience, easy distribution |
+| **SaaS/Web App** | Web App | Multi-user, cloud sync, easy updates |
+| **Internal Tools** | Desktop App | Local data, performance, security |
+| **Customer-Facing** | Web App | Accessibility, cross-platform, maintenance |
+| **Maximum Flexibility** | Hybrid | Both options available |
+
+---
+
+## 🖥️ Option 1: Desktop Application Deployment (Recommended)
 
 ### Step 1: Create Railway Project
 
