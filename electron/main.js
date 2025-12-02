@@ -11,6 +11,12 @@ const fs = require('fs');
 // Import database module
 const database = require('./database');
 
+// Handle running as root (required in some Linux environments)
+// This must be called before app.whenReady()
+if (process.platform === 'linux' && process.getuid && process.getuid() === 0) {
+  app.commandLine.appendSwitch('no-sandbox');
+}
+
 const CONFIG = {
   DEV_SERVER_URL: 'http://localhost:3000',
   WINDOW_WIDTH: 1400,
@@ -85,11 +91,60 @@ function waitForServer(url, maxAttempts = 30) {
 
 function startNextServer() {
   return new Promise((resolve, reject) => {
-    log('Checking for running dev server...');
-    
-    // First check if a server is already running
     const http = require('http');
-    
+
+    if (app.isPackaged) {
+      // Production mode: Start the standalone Next.js server
+      log('Starting Next.js standalone server for production...');
+
+      const serverPath = path.join(process.resourcesPath, 'app', '.next', 'standalone', 'server.js');
+      const publicPath = path.join(process.resourcesPath, 'app', 'public');
+      const staticPath = path.join(process.resourcesPath, 'app', '.next', 'static');
+
+      // Find an available port
+      findAvailablePort(3000).then((port) => {
+        actualServerUrl = `http://localhost:${port}`;
+
+        nextServer = spawn(process.execPath.replace('Electron', 'node').replace('electron', 'node'), [serverPath], {
+          cwd: path.join(process.resourcesPath, 'app'),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            NODE_ENV: 'production',
+            PORT: port.toString(),
+            HOSTNAME: 'localhost',
+            LOCAL_DATABASE_URL: `file:${database.getLocalDatabasePath()}`,
+          }
+        });
+
+        nextServer.stdout.on('data', (data) => {
+          log(`[Next.js] ${data.toString().trim()}`);
+        });
+
+        nextServer.stderr.on('data', (data) => {
+          log(`[Next.js] ${data.toString().trim()}`);
+        });
+
+        nextServer.on('error', (err) => {
+          log(`Failed to start production server: ${err.message}`, 'error');
+          reject(err);
+        });
+
+        // Wait for server to be ready
+        waitForServer(actualServerUrl, 30)
+          .then(() => {
+            log(`Production server ready at: ${actualServerUrl}`);
+            resolve();
+          })
+          .catch(reject);
+      });
+
+      return;
+    }
+
+    // Development mode: Check for existing server or start new one
+    log('Checking for running dev server...');
+
     // Try ports 3000-3005
     const tryPorts = async () => {
       for (let port = 3000; port <= 3005; port++) {
@@ -108,7 +163,7 @@ function startNextServer() {
           // Port not responding, try next
         }
       }
-      
+
       // No server found, start our own
       log('No existing server found, starting new one...');
       
@@ -183,7 +238,7 @@ function startNextServer() {
         resolve(); 
       }
     };
-    
+
     tryPorts().catch(reject);
   });
 }
@@ -644,11 +699,9 @@ async function initializeApp() {
       log(`Database initialization warning: ${dbResult.error}`, 'warn');
     }
     
-    // Start/find Next.js server in development
-    if (!app.isPackaged) {
-      await startNextServer();
-      log(`Using server at: ${actualServerUrl}`);
-    }
+    // Start/find Next.js server (both development and production)
+    await startNextServer();
+    log(`Using server at: ${actualServerUrl}`);
     
     // Setup app
     createAppMenu();
