@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { callAI } from '@/lib/ai/ai-service-manager'
+import { complete } from '@/lib/ai/ai-service-manager'
 import { logger } from '@/lib/logger'
 
 interface TenderInsights {
@@ -152,7 +152,7 @@ Respond in JSON format:
   "opportunityScore": 75
 }`
 
-        const aiResponse = await callAI({
+        const aiResponse = await complete({
           prompt,
           systemPrompt: 'You are a medical tender analysis expert. Provide concise, actionable insights.',
           maxTokens: 1000,
@@ -184,7 +184,7 @@ Respond in JSON format:
       insights,
     })
   } catch (error) {
-    logger.error('Tender analytics error:', error)
+    logger.error('Tender analytics error:', error as Error)
     return NextResponse.json(
       { error: 'Failed to fetch tender analytics' },
       { status: 500 }

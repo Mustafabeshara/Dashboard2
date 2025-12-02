@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
         name: 'Medical Distribution Dashboard',
         version: '1.0.0',
         environment: envInfo.nodeEnv,
-        isElectron: envInfo.isElectron,
       },
       business: {
         currency: CURRENCY_CONFIG.DEFAULT,
@@ -57,7 +56,6 @@ export async function GET(request: NextRequest) {
         providerCount: aiProviders.length,
       },
       security: {
-        sessionTimeout: envInfo.sessionTimeout || 30,
         hasNextAuthSecret: !!process.env.NEXTAUTH_SECRET,
       },
       database: {

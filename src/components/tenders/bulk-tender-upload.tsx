@@ -24,7 +24,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import {
   Table,
   TableBody,
@@ -397,7 +396,7 @@ export function BulkTenderUpload({ onComplete, onCreateTender }: BulkTenderUploa
 
           {selectedTender?.data && (
             <div className="space-y-4">
-              <Separator />
+              <hr className="my-4" />
 
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
@@ -424,7 +423,7 @@ export function BulkTenderUpload({ onComplete, onCreateTender }: BulkTenderUploa
                 <p>{selectedTender.data.title || 'N/A'}</p>
               </div>
 
-              <Separator />
+              <hr className="my-4" />
 
               {/* Items */}
               <div>
@@ -457,7 +456,7 @@ export function BulkTenderUpload({ onComplete, onCreateTender }: BulkTenderUploa
 
               {selectedTender.data.notes && (
                 <>
-                  <Separator />
+                  <hr className="my-4" />
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Notes</p>
                     <p className="text-sm">{selectedTender.data.notes}</p>
@@ -465,7 +464,7 @@ export function BulkTenderUpload({ onComplete, onCreateTender }: BulkTenderUploa
                 </>
               )}
 
-              <Separator />
+              <hr className="my-4" />
 
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setSelectedTender(null)}>
