@@ -81,10 +81,8 @@ function ApiKeyInput({
   const [localError, setLocalError] = useState<string | null>(null)
 
   const handleSave = async () => {
-    console.log('[ApiKeyInput] Saving key:', setting.key, 'value length:', value.length)
     setLocalError(null)
     const success = await onSave(setting.key, value)
-    console.log('[ApiKeyInput] Save result:', success)
     if (success) {
       setValue('')
       setIsEditing(false)
@@ -287,22 +285,18 @@ export default function SettingsPage() {
   }, [])
 
   const handleSave = async (key: string, value: string): Promise<boolean> => {
-    console.log('[Settings] handleSave called:', key, 'value length:', value.length)
     setSaving(key)
     setError(null)
     setSuccess(null)
     
     try {
-      console.log('[Settings] Fetching /api/admin/api-keys...')
       const response = await fetch('/api/admin/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, value })
       })
       
-      console.log('[Settings] Response status:', response.status)
       const data = await response.json()
-      console.log('[Settings] Response data:', data)
       
       if (!response.ok) {
         setError(data.error || `Failed to save API key (${response.status})`)
@@ -313,7 +307,6 @@ export default function SettingsPage() {
       await fetchApiKeys()
       return true
     } catch (err) {
-      console.error('[Settings] Error:', err)
       setError(err instanceof Error ? err.message : 'Failed to save')
       return false
     } finally {
