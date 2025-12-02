@@ -7,11 +7,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  
-  // Disable ESLint during build (already done in CI)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
 
   // Experimental features for better production performance
   experimental: {
