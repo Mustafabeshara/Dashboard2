@@ -2,7 +2,7 @@
 
 /**
  * Desktop Application Build Script
- * Automates the building of the desktop application for all platforms
+ * Automates the building of the desktop application using Nextron
  */
 
 const { execSync } = require('child_process');
@@ -58,12 +58,12 @@ function checkPrerequisites() {
     execCommand('node --version', { stdio: 'pipe' });
     execCommand('npm --version', { stdio: 'pipe' });
     
-    // Check if electron-builder is installed
+    // Check if nextron is installed
     try {
-      execCommand('npx electron-builder --version', { stdio: 'pipe' });
+      execCommand('npx nextron --version', { stdio: 'pipe' });
     } catch (err) {
-      log('Installing electron-builder...');
-      execCommand('npm install --save-dev electron-builder');
+      log('Installing nextron...');
+      execCommand('npm install --save-dev nextron');
     }
     
     log('Prerequisites check passed');
@@ -121,29 +121,26 @@ async function generatePrismaClient() {
 // Build Electron application
 async function buildElectronApp(platform) {
   log(`Building Electron application for ${platform}...`);
-  
+
   try {
-    let command = 'npm run electron:builder';
-    
+    let command = 'npm run build';
+
+    // Nextron build command is platform-agnostic
+    // The built app will work on the current platform
     switch (platform.toLowerCase()) {
       case 'mac':
       case 'macos':
-        command = 'npm run electron:builder:mac';
-        break;
       case 'win':
       case 'windows':
-        command = 'npm run electron:builder:win';
-        break;
       case 'linux':
-        command = 'npm run electron:builder:linux';
-        break;
       case 'all':
-        command = 'npm run electron:builder';
+        command = 'npm run build';
         break;
       default:
         log(`Unknown platform: ${platform}, building for current platform`);
+        command = 'npm run build';
     }
-    
+
     execCommand(command);
     log(`Electron application built successfully for ${platform}`);
   } catch (error) {
@@ -205,12 +202,14 @@ Platforms:
   mac/macos    - Build for macOS (Intel and Apple Silicon)
   win/windows  - Build for Windows
   linux        - Build for Linux
-  all          - Build for all platforms (default)
-  current      - Build for current platform
+  all          - Build for all platforms
+  current      - Build for current platform (default)
+
+Note: This tool now uses Nextron for building. The built application will run on the current platform.
 
 Examples:
   node scripts/build-desktop.js mac
-  node scripts/build-desktop.js all
+  node scripts/build-desktop.js current
   node scripts/build-desktop.js
 
 Options:

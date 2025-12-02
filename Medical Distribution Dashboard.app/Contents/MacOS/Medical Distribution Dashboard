@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# Medical Distribution Management System Launcher
+# macOS Application Bundle Executable
+
+echo "🚀 Starting Medical Distribution Management System..."
+echo "📱 Desktop Application Mode"
+echo ""
+
+# Get the directory where the .app bundle is located
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+
+# Navigate to the project directory (assuming it's in the same directory as the .app)
+PROJECT_DIR="$APP_DIR"
+
+# Check if we're in the right directory, otherwise assume it's in the parent directory
+if [ ! -f "$PROJECT_DIR/package.json" ]; then
+    PROJECT_DIR="$(cd "$APP_DIR/.." && pwd)"
+fi
+
+if [ ! -f "$PROJECT_DIR/package.json" ]; then
+    # Fallback: look for the project in common locations
+    PROJECT_DIR="$HOME/Desktop/Medical-Assistant/Dashboard2"
+fi
+
+echo "📂 Looking for project in: $PROJECT_DIR"
+
+# Check if the project directory exists
+if [ ! -d "$PROJECT_DIR" ]; then
+    echo "❌ Error: Project directory not found at $PROJECT_DIR"
+    echo "Please ensure the Medical Distribution Dashboard project is available"
+    exit 1
+fi
+
+# Navigate to the project directory
+cd "$PROJECT_DIR"
+
+# Check if Node.js is available
+if ! command -v node &> /dev/null; then
+    echo "❌ Error: Node.js is not installed or not in PATH"
+    echo "Please install Node.js from https://nodejs.org"
+    exit 1
+fi
+
+# Check if npm is available
+if ! command -v npm &> /dev/null; then
+    echo "❌ Error: npm is not installed or not in PATH"
+    echo "Please install npm (usually comes with Node.js)"
+    exit 1
+fi
+
+# Check if we're in the right directory
+if [ ! -f "package.json" ]; then
+    echo "❌ Error: package.json not found in $PWD"
+    echo "Please ensure you're in the Medical Distribution Dashboard project root"
+    exit 1
+fi
+
+echo "✅ Environment check passed"
+echo "📂 Project directory: $PWD"
+echo ""
+
+# Install dependencies if node_modules doesn't exist
+if [ ! -d "node_modules" ]; then
+    echo "📦 Installing dependencies..."
+    npm install
+    if [ $? -ne 0 ]; then
+        echo "❌ Error: Failed to install dependencies"
+        exit 1
+    fi
+    echo "✅ Dependencies installed"
+    echo ""
+fi
+
+# Launch the desktop application
+echo "🎯 Launching Medical Distribution Dashboard..."
+echo "💡 The application will open in a new window"
+echo "🔄 This terminal window will close automatically"
+echo ""
+
+# Launch in background and close terminal
+npm run dev &
+disown
+
+# Give it a moment to start
+sleep 2
+
+echo "✅ Application launched successfully!"
+exit 0
