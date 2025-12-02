@@ -101,10 +101,16 @@ export default function TendersPage() {
               New Tender
             </Link>
           </Button>
+          <Button variant="secondary" asChild>
+            <Link href="/tenders/bulk-upload">
+              <FileText className="mr-2 h-4 w-4" />
+              Bulk Upload
+            </Link>
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/documents?type=TENDER_DOCUMENT">
               <FileText className="mr-2 h-4 w-4" />
-              Upload Document
+              Documents
             </Link>
           </Button>
         </div>
