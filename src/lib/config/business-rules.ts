@@ -63,6 +63,8 @@ export const SESSION_CONFIG = {
   get TIMEOUT_MS() {
     return this.TIMEOUT_MINUTES * 60 * 1000
   },
+  DEFAULT_TIMEOUT_HOURS: 8, // Default session timeout in hours
+  IDLE_WARNING_MINUTES: 5, // Show warning 5 min before expiry
 }
 
 /**

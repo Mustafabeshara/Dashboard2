@@ -101,9 +101,20 @@ export async function getApiKey(keyName: string): Promise<string | null> {
   // Fall back to environment variable
   const envValue = process.env[keyName]
   
-  // Don't return placeholder values
-  if (envValue && !envValue.includes('your-') && !envValue.includes('-key')) {
-    return envValue
+  // Don't return placeholder values - check for common placeholder patterns
+  const placeholderPatterns = [
+    'your-', '-key', 'placeholder', 'changeme', 'replace-me',
+    'example', 'xxx', 'test-', 'dummy', 'sample', 'temp-',
+  ]
+  
+  if (envValue) {
+    const lowerValue = envValue.toLowerCase()
+    const isPlaceholder = placeholderPatterns.some(pattern => 
+      lowerValue.includes(pattern.toLowerCase())
+    )
+    if (!isPlaceholder && envValue.length > 10) {
+      return envValue
+    }
   }
   
   return null

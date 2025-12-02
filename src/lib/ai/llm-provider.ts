@@ -283,7 +283,15 @@ const getGeminiConfig = async (): Promise<{ apiKey: string; apiUrl: string; useG
   const geminiKey = await getGeminiApiKey() || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
   
   // Check if it's a real key (not placeholder)
-  if (geminiKey && !geminiKey.includes('your-') && geminiKey.length > 20) {
+  const placeholderPatterns = [
+    'your-', '-key', 'placeholder', 'changeme', 'replace-me',
+    'example', 'xxx', 'test-', 'dummy', 'sample', 'temp-',
+  ]
+  const isPlaceholder = geminiKey && placeholderPatterns.some(p => 
+    geminiKey.toLowerCase().includes(p.toLowerCase())
+  )
+  
+  if (geminiKey && !isPlaceholder && geminiKey.length > 20) {
     return {
       apiKey: geminiKey,
       apiUrl: 'https://generativelanguage.googleapis.com/v1beta',

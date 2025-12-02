@@ -137,12 +137,12 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 60, // 30 minutes
+    maxAge: 8 * 60 * 60, // 8 hours (increased from 30 min to reduce frequent logouts)
   },
   jwt: {
-    maxAge: 30 * 60, // 30 minutes
+    maxAge: 8 * 60 * 60, // 8 hours
   },
-  secret: 'development-secret-key-that-is-long-enough-for-nextauth-requirements-minimum-32-characters-for-testing-purposes-only-change-in-production-123456789012345678901234567890',
+  secret: process.env.NEXTAUTH_SECRET || 'development-secret-key-that-is-long-enough-for-nextauth-requirements-minimum-32-characters-for-testing-purposes-only-change-in-production-123456789012345678901234567890',
 }
 
 /**
