@@ -13,6 +13,8 @@ interface CacheEntry {
 class CacheManager {
   private memoryCache: Map<string, CacheEntry> = new Map()
   private redis: any = null
+  private readonly MAX_CACHE_SIZE = 10000
+  private accessOrder: string[] = [] // For LRU tracking
 
   constructor() {
     this.initializeRedis()
@@ -41,7 +43,24 @@ class CacheManager {
     for (const [key, entry] of this.memoryCache.entries()) {
       if (entry.expiresAt < now) {
         this.memoryCache.delete(key)
+        this.removeFromAccessOrder(key)
       }
+    }
+  }
+
+  private removeFromAccessOrder(key: string) {
+    const index = this.accessOrder.indexOf(key)
+    if (index > -1) {
+      this.accessOrder.splice(index, 1)
+    }
+  }
+
+  private evictOldest() {
+    if (this.accessOrder.length === 0) return
+    const oldestKey = this.accessOrder.shift()
+    if (oldestKey) {
+      this.memoryCache.delete(oldestKey)
+      logger.debug(`Evicted oldest cache entry: ${oldestKey}`)
     }
   }
 
@@ -60,6 +79,9 @@ class CacheManager {
       const entry = this.memoryCache.get(key)
       if (entry && entry.expiresAt > Date.now()) {
         logger.debug(`Cache hit (Memory): ${key}`)
+        // Update LRU order
+        this.removeFromAccessOrder(key)
+        this.accessOrder.push(key)
         return entry.value
       }
 
@@ -81,8 +103,15 @@ class CacheManager {
         logger.debug(`Cache set (Redis): ${key}`, { ttl: ttlSeconds })
       }
 
+      // Check size before adding to memory cache
+      if (this.memoryCache.size >= this.MAX_CACHE_SIZE) {
+        this.evictOldest()
+      }
+
       // Always set in memory cache as fallback
       this.memoryCache.set(key, { value, expiresAt })
+      this.removeFromAccessOrder(key)
+      this.accessOrder.push(key)
       logger.debug(`Cache set (Memory): ${key}`, { ttl: ttlSeconds })
     } catch (error) {
       logger.error('Cache set error', error as Error, { key })

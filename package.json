@@ -25,6 +25,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "validate:env": "tsx scripts/validate-env.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",

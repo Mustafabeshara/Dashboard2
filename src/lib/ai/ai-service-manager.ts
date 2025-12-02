@@ -24,6 +24,12 @@ export interface AIResponse {
     completionTokens: number
     totalTokens: number
   }
+  cost?: {
+    provider: string
+    promptTokens: number
+    completionTokens: number
+    estimatedCost: number
+  }
   cached?: boolean
   error?: string
   latency?: number

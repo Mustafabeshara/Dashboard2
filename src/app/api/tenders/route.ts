@@ -4,15 +4,34 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { TenderStatus, Prisma } from '@prisma/client'
 import { cache, CacheKeys, CacheTTL } from '@/lib/cache'
 import { audit, AuditAction } from '@/lib/audit'
 import { WebSocketHelpers } from '@/lib/websocket'
+import { authOptions } from '@/lib/auth'
+import { requirePermission } from '@/lib/rbac'
+import { handleError, AuthenticationError } from '@/lib/errors/error-handler'
+import { withContext } from '@/lib/middleware/context'
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit'
 
 // GET /api/tenders - List all tenders with filters
 export async function GET(request: NextRequest) {
   try {
+    // Authentication check
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      throw new AuthenticationError()
+    }
+
+    // Permission check
+    requirePermission(session, 'tenders', 'view')
+
+    // Rate limiting
+    const rateLimitResult = await rateLimit(RateLimitPresets.standard)(request)
+    if (rateLimitResult) return rateLimitResult
+
     const { searchParams } = new URL(request.url)
     
     // Try cache first
@@ -109,9 +128,22 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/tenders - Create new tender
+// POST /api/tenders - Create a new tender
 export async function POST(request: NextRequest) {
   try {
+    // Authentication check
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      throw new AuthenticationError()
+    }
+
+    // Permission check
+    requirePermission(session, 'tenders', 'create')
+
+    // Rate limiting (stricter for mutations)
+    const rateLimitResult = await rateLimit(RateLimitPresets.strict)(request)
+    if (rateLimitResult) return rateLimitResult
+
     const body = await request.json()
 
     const {

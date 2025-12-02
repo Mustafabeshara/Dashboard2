@@ -87,6 +87,14 @@ export const AI_PROVIDERS: Record<string, AIProviderConfig> = {
   },
 }
 
+// Provider cost per 1K tokens (approximate in USD)
+export const PROVIDER_COSTS: Record<string, { prompt: number; completion: number }> = {
+  groq: { prompt: 0.0001, completion: 0.0001 },
+  gemini: { prompt: 0.00025, completion: 0.00050 },
+  googleAI: { prompt: 0.00050, completion: 0.00150 },
+  anthropic: { prompt: 0.00025, completion: 0.00125 },
+}
+
 // Main configuration
 export const AI_CONFIG: AIServiceConfig = {
   providers: Object.values(AI_PROVIDERS)
@@ -97,6 +105,40 @@ export const AI_CONFIG: AIServiceConfig = {
   retryDelay: 1000, // 1 second
   cacheEnabled: true,
   cacheTTL: 3600, // 1 hour
+}
+
+/**
+ * Validate AI provider API keys
+ */
+export function validateAIProviders(): { valid: string[]; invalid: string[] } {
+  const results = { valid: [] as string[], invalid: [] as string[] }
+  
+  for (const [name, config] of Object.entries(AI_PROVIDERS)) {
+    if (config.isEnabled && config.apiKey) {
+      results.valid.push(name)
+    } else if (config.isEnabled && !config.apiKey) {
+      results.invalid.push(name)
+    }
+  }
+  
+  return results
+}
+
+/**
+ * Calculate estimated cost for AI request
+ */
+export function estimateAICost(
+  provider: string,
+  promptTokens: number,
+  completionTokens: number
+): number {
+  const costs = PROVIDER_COSTS[provider]
+  if (!costs) return 0
+  
+  return (
+    (promptTokens / 1000) * costs.prompt +
+    (completionTokens / 1000) * costs.completion
+  )
 }
 
 // Task-specific model recommendations

@@ -97,6 +97,31 @@ export async function extractTextFromBufferWithChunking(
  */
 export async function extractTextFromBuffer(buffer: Buffer, mimeType: string): Promise<ProcessedDocument> {
   try {
+    // Validate file size (50MB limit)
+    const maxSize = 50 * 1024 * 1024
+    if (buffer.length > maxSize) {
+      throw new Error(`File too large: ${(buffer.length / 1024 / 1024).toFixed(2)}MB (max: 50MB)`)
+    }
+
+    // Validate MIME type
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/jpg',
+      'text/plain',
+    ]
+    if (!allowedTypes.includes(mimeType)) {
+      throw new Error(`Unsupported file type: ${mimeType}`)
+    }
+
+    logger.info('Processing document', {
+      context: {
+        mimeType,
+        size: buffer.length,
+      },
+    })
+
     // Handle PDF files
     if (mimeType === 'application/pdf') {
       return await extractTextFromPDF(buffer);
