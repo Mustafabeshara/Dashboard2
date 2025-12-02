@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Switch } from '@/components/ui/switch'
 import { 
   Save, 
   Building, 
@@ -19,7 +20,10 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  Trash2
+  Trash2,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react'
 
 interface ApiKeySetting {
@@ -30,6 +34,34 @@ interface ApiKeySetting {
   source: 'database' | 'environment' | 'not_set'
   maskedValue: string
   isSecret: boolean
+}
+
+interface NotificationPreferences {
+  email: boolean
+  system: boolean
+  budgetAlerts: boolean
+  tenderUpdates: boolean
+  inventoryAlerts: boolean
+  approvalRequests: boolean
+  weeklyDigest: boolean
+}
+
+interface AppearancePreferences {
+  theme: 'light' | 'dark' | 'system'
+  sidebarCollapsed: boolean
+  compactMode: boolean
+  colorScheme: 'default' | 'blue' | 'green' | 'purple'
+}
+
+interface CompanyProfile {
+  name: string
+  taxId: string
+  email: string
+  phone: string
+  address: string
+  website: string
+  registrationNumber: string
+  currency: string
 }
 
 function ApiKeyInput({ 
@@ -151,13 +183,47 @@ export default function SettingsPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeySetting[]>([])
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  
+  // Company Profile state
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile>({
+    name: '',
+    taxId: '',
+    email: '',
+    phone: '',
+    address: '',
+    website: '',
+    registrationNumber: '',
+    currency: 'KWD',
+  })
+  const [savingCompany, setSavingCompany] = useState(false)
+
+  // Notification Preferences state
+  const [notifications, setNotifications] = useState<NotificationPreferences>({
+    email: true,
+    system: true,
+    budgetAlerts: true,
+    tenderUpdates: true,
+    inventoryAlerts: true,
+    approvalRequests: true,
+    weeklyDigest: false,
+  })
+  const [savingNotifications, setSavingNotifications] = useState(false)
+
+  // Appearance state
+  const [appearance, setAppearance] = useState<AppearancePreferences>({
+    theme: 'system',
+    sidebarCollapsed: false,
+    compactMode: false,
+    colorScheme: 'default',
+  })
+  const [savingAppearance, setSavingAppearance] = useState(false)
 
   const fetchApiKeys = async () => {
     try {
       const response = await fetch('/api/admin/api-keys')
       if (!response.ok) {
         if (response.status === 403) {
-          setError('You need admin privileges to manage API keys')
+          // Non-admin can still view settings
           return
         }
         throw new Error('Failed to load API keys')
@@ -165,14 +231,46 @@ export default function SettingsPage() {
       const data = await response.json()
       setApiKeys(data.settings)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load API keys')
-    } finally {
-      setLoading(false)
+      console.error('API keys fetch error:', err)
+    }
+  }
+
+  const fetchCompanyProfile = async () => {
+    try {
+      const response = await fetch('/api/company/profile')
+      if (response.ok) {
+        const data = await response.json()
+        setCompanyProfile(data)
+      }
+    } catch (err) {
+      console.error('Company profile fetch error:', err)
+    }
+  }
+
+  const fetchUserPreferences = async () => {
+    try {
+      const response = await fetch('/api/user/preferences')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.notifications) setNotifications(data.notifications)
+        if (data.appearance) setAppearance(data.appearance)
+      }
+    } catch (err) {
+      console.error('User preferences fetch error:', err)
     }
   }
 
   useEffect(() => {
-    fetchApiKeys()
+    const loadAll = async () => {
+      setLoading(true)
+      await Promise.all([
+        fetchApiKeys(),
+        fetchCompanyProfile(),
+        fetchUserPreferences(),
+      ])
+      setLoading(false)
+    }
+    loadAll()
   }, [])
 
   const handleSave = async (key: string, value: string) => {
@@ -222,6 +320,95 @@ export default function SettingsPage() {
     }
   }
 
+  const handleSaveCompanyProfile = async () => {
+    setSavingCompany(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/company/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(companyProfile)
+      })
+      
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to save company profile')
+      }
+      
+      setSuccess('Company profile saved successfully')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSavingCompany(false)
+    }
+  }
+
+  const handleSaveNotifications = async () => {
+    setSavingNotifications(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notifications })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to save notification preferences')
+      }
+      
+      setSuccess('Notification preferences saved')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSavingNotifications(false)
+    }
+  }
+
+  const handleSaveAppearance = async () => {
+    setSavingAppearance(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appearance })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to save appearance preferences')
+      }
+      
+      // Apply theme immediately
+      applyTheme(appearance.theme)
+      
+      setSuccess('Appearance preferences saved')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSavingAppearance(false)
+    }
+  }
+
+  const applyTheme = (theme: 'light' | 'dark' | 'system') => {
+    const root = document.documentElement
+    if (theme === 'dark') {
+      root.classList.add('dark')
+    } else if (theme === 'light') {
+      root.classList.remove('dark')
+    } else {
+      // System preference
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        root.classList.add('dark')
+      } else {
+        root.classList.remove('dark')
+      }
+    }
+  }
+
   // Clear messages after 3 seconds
   useEffect(() => {
     if (success || error) {
@@ -240,6 +427,20 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">Manage your system configuration and preferences</p>
       </div>
 
+      {/* Global Messages */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <XCircle className="w-5 h-5 text-red-500" />
+          <span className="text-red-800">{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-green-500" />
+          <span className="text-green-800">{success}</span>
+        </div>
+      )}
+
       <Tabs defaultValue="company" className="space-y-6">
         <TabsList>
           <TabsTrigger value="company"><Building className="mr-2 h-4 w-4" />Company</TabsTrigger>
@@ -248,56 +449,95 @@ export default function SettingsPage() {
           <TabsTrigger value="appearance"><Palette className="mr-2 h-4 w-4" />Appearance</TabsTrigger>
         </TabsList>
 
+        {/* Company Profile Tab */}
         <TabsContent value="company">
           <Card>
             <CardHeader>
               <CardTitle>Company Profile</CardTitle>
-              <CardDescription>Update your company information</CardDescription>
+              <CardDescription>Update your company information used in reports and documents</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="companyName">Company Name</Label>
-                  <Input id="companyName" placeholder="Your Company Name" defaultValue="Beshara Group" />
+                  <Input 
+                    id="companyName" 
+                    value={companyProfile.name}
+                    onChange={(e) => setCompanyProfile({ ...companyProfile, name: e.target.value })}
+                    placeholder="Your Company Name"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="taxId">Tax ID</Label>
-                  <Input id="taxId" placeholder="Tax identification number" />
+                  <Label htmlFor="taxId">Tax ID / VAT Number</Label>
+                  <Input 
+                    id="taxId" 
+                    value={companyProfile.taxId}
+                    onChange={(e) => setCompanyProfile({ ...companyProfile, taxId: e.target.value })}
+                    placeholder="Tax identification number"
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="company@example.com" />
+                  <Label htmlFor="email">Company Email</Label>
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    value={companyProfile.email}
+                    onChange={(e) => setCompanyProfile({ ...companyProfile, email: e.target.value })}
+                    placeholder="company@example.com"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" placeholder="+965 XXXX XXXX" />
+                  <Input 
+                    id="phone" 
+                    value={companyProfile.phone}
+                    onChange={(e) => setCompanyProfile({ ...companyProfile, phone: e.target.value })}
+                    placeholder="+965 XXXX XXXX"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="website">Website</Label>
+                  <Input 
+                    id="website" 
+                    value={companyProfile.website}
+                    onChange={(e) => setCompanyProfile({ ...companyProfile, website: e.target.value })}
+                    placeholder="https://example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="registrationNumber">Registration Number</Label>
+                  <Input 
+                    id="registrationNumber" 
+                    value={companyProfile.registrationNumber}
+                    onChange={(e) => setCompanyProfile({ ...companyProfile, registrationNumber: e.target.value })}
+                    placeholder="Company registration number"
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="address">Address</Label>
-                <Input id="address" placeholder="Company address" />
+                <Input 
+                  id="address" 
+                  value={companyProfile.address}
+                  onChange={(e) => setCompanyProfile({ ...companyProfile, address: e.target.value })}
+                  placeholder="Company address"
+                />
               </div>
-              <Button><Save className="mr-2 h-4 w-4" />Save Changes</Button>
+              <Button onClick={handleSaveCompanyProfile} disabled={savingCompany}>
+                {savingCompany ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save Changes
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Integrations Tab */}
         <TabsContent value="integrations">
           <div className="space-y-6">
-            {/* Status Messages */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
-                <XCircle className="w-5 h-5 text-red-500" />
-                <span className="text-red-800">{error}</span>
-              </div>
-            )}
-            {success && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span className="text-green-800">{success}</span>
-              </div>
-            )}
-
             {/* API Diagnostics Link */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
@@ -324,12 +564,7 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                    <span className="ml-2 text-gray-500">Loading API keys...</span>
-                  </div>
-                ) : apiKeys.length > 0 ? (
+                {apiKeys.length > 0 ? (
                   <div className="space-y-4">
                     {/* Group AI providers */}
                     <div className="space-y-3">
@@ -367,7 +602,7 @@ export default function SettingsPage() {
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-center py-4">
-                    Unable to load API key settings
+                    API key management requires admin privileges
                   </p>
                 )}
               </CardContent>
@@ -396,26 +631,208 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
+        {/* Notifications Tab */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Manage how you receive notifications</CardDescription>
+              <CardDescription>Manage how and when you receive notifications</CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Notification settings - Implementation in progress</p>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-gray-700">Delivery Methods</h4>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <Label className="font-medium">Email Notifications</Label>
+                    <p className="text-sm text-muted-foreground">Receive notifications via email</p>
+                  </div>
+                  <Switch 
+                    checked={notifications.email}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, email: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <Label className="font-medium">In-App Notifications</Label>
+                    <p className="text-sm text-muted-foreground">Show notifications within the application</p>
+                  </div>
+                  <Switch 
+                    checked={notifications.system}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, system: checked })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-gray-700">Notification Types</h4>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <Label className="font-medium">Budget Alerts</Label>
+                    <p className="text-sm text-muted-foreground">Notifications when budget thresholds are reached</p>
+                  </div>
+                  <Switch 
+                    checked={notifications.budgetAlerts}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, budgetAlerts: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <Label className="font-medium">Tender Updates</Label>
+                    <p className="text-sm text-muted-foreground">Notifications for tender status changes</p>
+                  </div>
+                  <Switch 
+                    checked={notifications.tenderUpdates}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, tenderUpdates: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <Label className="font-medium">Inventory Alerts</Label>
+                    <p className="text-sm text-muted-foreground">Low stock and reorder notifications</p>
+                  </div>
+                  <Switch 
+                    checked={notifications.inventoryAlerts}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, inventoryAlerts: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <Label className="font-medium">Approval Requests</Label>
+                    <p className="text-sm text-muted-foreground">Notifications when approvals are needed</p>
+                  </div>
+                  <Switch 
+                    checked={notifications.approvalRequests}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, approvalRequests: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <Label className="font-medium">Weekly Digest</Label>
+                    <p className="text-sm text-muted-foreground">Weekly summary of activities and reports</p>
+                  </div>
+                  <Switch 
+                    checked={notifications.weeklyDigest}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, weeklyDigest: checked })}
+                  />
+                </div>
+              </div>
+
+              <Button onClick={handleSaveNotifications} disabled={savingNotifications}>
+                {savingNotifications ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save Preferences
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* Appearance Tab */}
         <TabsContent value="appearance">
           <Card>
             <CardHeader>
               <CardTitle>Appearance</CardTitle>
-              <CardDescription>Customize the look and feel</CardDescription>
+              <CardDescription>Customize the look and feel of the application</CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Appearance settings - Implementation in progress</p>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-gray-700">Theme</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <button
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                      appearance.theme === 'light' 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setAppearance({ ...appearance, theme: 'light' })}
+                  >
+                    <Sun className="w-6 h-6" />
+                    <span className="text-sm font-medium">Light</span>
+                  </button>
+                  <button
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                      appearance.theme === 'dark' 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setAppearance({ ...appearance, theme: 'dark' })}
+                  >
+                    <Moon className="w-6 h-6" />
+                    <span className="text-sm font-medium">Dark</span>
+                  </button>
+                  <button
+                    className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                      appearance.theme === 'system' 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setAppearance({ ...appearance, theme: 'system' })}
+                  >
+                    <Monitor className="w-6 h-6" />
+                    <span className="text-sm font-medium">System</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-gray-700">Color Scheme</h4>
+                <div className="flex gap-3">
+                  {[
+                    { id: 'default', color: 'bg-blue-500', label: 'Default' },
+                    { id: 'blue', color: 'bg-sky-500', label: 'Blue' },
+                    { id: 'green', color: 'bg-emerald-500', label: 'Green' },
+                    { id: 'purple', color: 'bg-violet-500', label: 'Purple' },
+                  ].map((scheme) => (
+                    <button
+                      key={scheme.id}
+                      className={`flex items-center gap-2 px-4 py-2 border-2 rounded-lg transition-colors ${
+                        appearance.colorScheme === scheme.id 
+                          ? 'border-gray-900' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => setAppearance({ ...appearance, colorScheme: scheme.id as AppearancePreferences['colorScheme'] })}
+                    >
+                      <div className={`w-4 h-4 rounded-full ${scheme.color}`} />
+                      <span className="text-sm">{scheme.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-gray-700">Layout Options</h4>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div>
+                    <Label className="font-medium">Collapsed Sidebar</Label>
+                    <p className="text-sm text-muted-foreground">Start with sidebar collapsed by default</p>
+                  </div>
+                  <Switch 
+                    checked={appearance.sidebarCollapsed}
+                    onCheckedChange={(checked) => setAppearance({ ...appearance, sidebarCollapsed: checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <Label className="font-medium">Compact Mode</Label>
+                    <p className="text-sm text-muted-foreground">Reduce spacing for more content on screen</p>
+                  </div>
+                  <Switch 
+                    checked={appearance.compactMode}
+                    onCheckedChange={(checked) => setAppearance({ ...appearance, compactMode: checked })}
+                  />
+                </div>
+              </div>
+
+              <Button onClick={handleSaveAppearance} disabled={savingAppearance}>
+                {savingAppearance ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save Appearance
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
