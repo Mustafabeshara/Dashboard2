@@ -184,7 +184,8 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error saving API key:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: `Failed to save: ${errorMessage}` }, { status: 500 })
   }
 }
 

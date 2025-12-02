@@ -71,18 +71,22 @@ function ApiKeyInput({
   saving 
 }: { 
   setting: ApiKeySetting
-  onSave: (key: string, value: string) => Promise<void>
+  onSave: (key: string, value: string) => Promise<boolean>
   onDelete: (key: string) => Promise<void>
   saving: string | null
 }) {
   const [value, setValue] = useState('')
   const [showValue, setShowValue] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
 
   const handleSave = async () => {
-    await onSave(setting.key, value)
-    setValue('')
-    setIsEditing(false)
+    setLocalError(null)
+    const success = await onSave(setting.key, value)
+    if (success) {
+      setValue('')
+      setIsEditing(false)
+    }
   }
 
   const handleDelete = async () => {
@@ -222,16 +226,16 @@ export default function SettingsPage() {
     try {
       const response = await fetch('/api/admin/api-keys')
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
         if (response.status === 403) {
-          // Non-admin user - show message that they can't manage API keys
-          setError('API Key management requires Admin or CEO role')
+          setError(data.error || 'API Key management requires a management role')
           return
         }
         if (response.status === 401) {
           setError('Please log in to manage API keys')
           return
         }
-        throw new Error('Failed to load API keys')
+        throw new Error(data.error || 'Failed to load API keys')
       }
       const data = await response.json()
       setApiKeys(data.settings)
@@ -280,7 +284,7 @@ export default function SettingsPage() {
     loadAll()
   }, [])
 
-  const handleSave = async (key: string, value: string) => {
+  const handleSave = async (key: string, value: string): Promise<boolean> => {
     setSaving(key)
     setError(null)
     setSuccess(null)
@@ -295,13 +299,16 @@ export default function SettingsPage() {
       const data = await response.json()
       
       if (!response.ok) {
-        throw new Error(data.error || `Failed to save API key (${response.status})`)
+        setError(data.error || `Failed to save API key (${response.status})`)
+        return false
       }
       
       setSuccess('API key saved successfully')
       await fetchApiKeys()
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
+      return false
     } finally {
       setSaving(null)
     }
