@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Medical Dashboard
+Comment=Medical Distribution Dashboard - Beshara Group
+Exec=/workspaces/Dashboard2/start-webapp.sh
+Icon=/workspaces/Dashboard2/public/icon.png
+Terminal=false
+Categories=Office;Development;
+StartupNotify=true
+StartupWMClass=medical-dashboard

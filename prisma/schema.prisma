@@ -762,3 +762,17 @@ enum SupplierCategory {
   FURNITURE
   OTHER
 }
+
+// ==================== APP SETTINGS ====================
+
+model AppSettings {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String   @db.Text
+  isEncrypted Boolean  @default(false) @map("is_encrypted")
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("app_settings")
+}

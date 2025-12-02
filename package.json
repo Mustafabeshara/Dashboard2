@@ -53,7 +53,7 @@
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
     "deploy:vercel": "vercel --prod",
-    "postinstall": "npx --yes prisma@6.8.2 generate"
+    "postinstall": "prisma generate || exit 0"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.940.0",
