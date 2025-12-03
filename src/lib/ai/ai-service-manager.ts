@@ -15,6 +15,7 @@ export interface AIRequest {
   maxTokens?: number
   temperature?: number
   taskType?: keyof typeof TASK_MODELS
+  userId?: string // User ID for tracking attribution
 }
 
 export interface AIResponse {
@@ -371,6 +372,7 @@ async function callProvider(
       latencyMs: response.latency,
       success: true,
       taskType: request.taskType,
+      userId: request.userId,
     }).catch(() => {
       // Don't fail the request if tracking fails
     })
@@ -403,6 +405,7 @@ async function callProvider(
       success: false,
       errorMessage,
       taskType: request.taskType,
+      userId: request.userId,
     }).catch(() => {
       // Don't fail the request if tracking fails
     })

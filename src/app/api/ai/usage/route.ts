@@ -23,6 +23,7 @@ const querySchema = z.object({
   endDate: z.string().optional(),
   action: z.enum(['stats', 'logs', 'summary', 'cleanup']).optional().default('stats'),
   limit: z.coerce.number().min(1).max(500).optional().default(50),
+  page: z.coerce.number().min(1).optional().default(1),
 })
 
 /**
@@ -85,13 +86,11 @@ export async function GET(request: NextRequest) {
       }
 
       case 'logs': {
-        const logs = await getRecentUsageLogs(params.limit)
+        const offset = (params.page - 1) * params.limit
+        const paginatedLogs = await getRecentUsageLogs(params.limit, offset)
         return NextResponse.json({
           success: true,
-          data: {
-            logs,
-            count: logs.length,
-          },
+          data: paginatedLogs,
         })
       }
 

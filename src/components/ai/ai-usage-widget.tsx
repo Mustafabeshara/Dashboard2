@@ -25,10 +25,18 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 
+interface RateLimitStatus {
+  provider: string
+  dailyLimit: number
+  minuteLimit: number
+  isEnabled: boolean
+}
+
 interface UsageSummary {
   today: { requests: number; tokens: number; cost: number }
   thisWeek: { requests: number; tokens: number; cost: number }
   thisMonth: { requests: number; tokens: number; cost: number }
+  rateLimits?: RateLimitStatus[]
 }
 
 interface ProviderStats {
@@ -118,7 +126,7 @@ export function AIUsageWidget() {
 
       if (summaryData.success) setSummary(summaryData.data)
       if (statsData.success) setStats(statsData.data.stats)
-      if (logsData.success) setRecentLogs(logsData.data.logs)
+      if (logsData.success) setRecentLogs(logsData.data.logs || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -377,6 +385,62 @@ export function AIUsageWidget() {
                     </div>
                   </div>
                 </div>
+
+                {/* Daily Usage Chart */}
+                {stats.dailyUsage.length > 0 && (
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="text-sm font-medium mb-3">Daily Usage (Last 7 Days)</h4>
+                    <div className="flex items-end gap-1 h-24">
+                      {stats.dailyUsage.slice(-7).map((day, idx) => {
+                        const maxRequests = Math.max(...stats.dailyUsage.slice(-7).map(d => d.requestCount), 1)
+                        const height = (day.requestCount / maxRequests) * 100
+                        return (
+                          <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                            <div
+                              className="w-full bg-purple-500 rounded-t transition-all"
+                              style={{ height: `${Math.max(height, 4)}%` }}
+                              title={`${day.date}: ${day.requestCount} requests, ${formatTokens(day.totalTokens)} tokens`}
+                            />
+                            <span className="text-[10px] text-gray-400">
+                              {new Date(day.date).toLocaleDateString('en', { weekday: 'short' }).slice(0, 2)}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div className="flex justify-between mt-2 text-xs text-gray-500">
+                      <span>
+                        {stats.dailyUsage.length > 0 && new Date(stats.dailyUsage[Math.max(0, stats.dailyUsage.length - 7)].date).toLocaleDateString()}
+                      </span>
+                      <span>
+                        {stats.dailyUsage.length > 0 && new Date(stats.dailyUsage[stats.dailyUsage.length - 1].date).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rate Limits */}
+                {summary.rateLimits && summary.rateLimits.length > 0 && (
+                  <div className="p-4 border rounded-lg">
+                    <h4 className="text-sm font-medium mb-3">Provider Rate Limits</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {summary.rateLimits.filter(r => r.isEnabled).map((limit, idx) => (
+                        <div key={idx} className="p-2 bg-gray-50 rounded text-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <Badge className={getProviderColor(limit.provider)} variant="outline">
+                              {limit.provider}
+                            </Badge>
+                          </div>
+                          <div className="text-gray-500">
+                            <span>{limit.minuteLimit}/min</span>
+                            <span className="mx-1">|</span>
+                            <span>{limit.dailyLimit.toLocaleString()}/day</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
