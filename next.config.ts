@@ -57,10 +57,12 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              "connect-src 'self' https://generativelanguage.googleapis.com https://api.groq.com https://api.anthropic.com https://api.openai.com",
+              // AI Providers + AWS + Google Vision + Railway + Upstash
+              "connect-src 'self' https://generativelanguage.googleapis.com https://api.groq.com https://api.anthropic.com https://api.openai.com https://*.amazonaws.com https://vision.googleapis.com wss://*.railway.app https://*.upstash.io",
               "frame-ancestors 'self'",
               "form-action 'self'",
               "base-uri 'self'",
+              "upgrade-insecure-requests",
             ].join('; '),
           },
         ],

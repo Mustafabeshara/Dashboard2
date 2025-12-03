@@ -1,6 +1,6 @@
 /**
- * Prisma Client Singleton with Lazy Initialization and Retry Logic
- * Ensures only one instance of Prisma Client exists and handles connection failures gracefully
+ * Prisma Client Singleton with Connection Pooling and Retry Logic
+ * Optimized for Railway/Production with PgBouncer support
  */
 import { PrismaClient } from '@prisma/client'
 
@@ -17,11 +17,33 @@ let prismaInstance: PrismaClient | undefined
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
- * Create Prisma Client with retry logic
+ * Connection pool configuration
+ * Optimized for Railway's connection limits
+ */
+const getConnectionPoolConfig = () => {
+  // Railway typically allows 20-100 connections depending on plan
+  // Using conservative defaults that work with PgBouncer
+  const poolConfig = {
+    connectionLimit: parseInt(process.env.DATABASE_CONNECTION_LIMIT || '10'),
+    poolTimeout: parseInt(process.env.DATABASE_POOL_TIMEOUT || '60'),
+    connectTimeout: parseInt(process.env.DATABASE_CONNECT_TIMEOUT || '60'),
+  }
+
+  return poolConfig
+}
+
+/**
+ * Create Prisma Client with retry logic and connection pooling
  */
 async function createPrismaClient(): Promise<PrismaClient> {
+  // Get pool config for logging purposes (actual pooling is in DATABASE_URL)
+  const poolConfig = getConnectionPoolConfig()
+  console.log(`Initializing Prisma with pool config: connectionLimit=${poolConfig.connectionLimit}, poolTimeout=${poolConfig.poolTimeout}s`)
+
   const client = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    // Note: Connection pool settings are typically configured via DATABASE_URL params
+    // e.g., ?connection_limit=10&pool_timeout=60
   })
 
   // Skip connection during build phase

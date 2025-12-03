@@ -1,13 +1,100 @@
 /**
- * Middleware for authentication and route protection
+ * Unified Middleware for Authentication, CORS, and Security
+ * Combines auth protection with CORS and security headers
  */
 import { withAuth } from 'next-auth/middleware'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+// Allowed origins for CORS
+const getAllowedOrigins = (): string[] => {
+  const origins: string[] = []
+
+  if (process.env.NEXTAUTH_URL) {
+    try {
+      const url = new URL(process.env.NEXTAUTH_URL)
+      origins.push(url.origin)
+    } catch {}
+  }
+
+  if (process.env.ALLOWED_ORIGINS) {
+    const customOrigins = process.env.ALLOWED_ORIGINS.split(',')
+      .map(o => o.trim())
+      .filter(Boolean)
+    origins.push(...customOrigins)
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    origins.push(
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001'
+    )
+  }
+
+  return [...new Set(origins)]
+}
+
+function isOriginAllowed(origin: string | null): boolean {
+  if (!origin) return true
+  const allowedOrigins = getAllowedOrigins()
+  return allowedOrigins.length === 0 || allowedOrigins.includes(origin)
+}
+
+// Add CORS headers to response
+function addCorsHeaders(response: NextResponse, request: NextRequest): void {
+  const origin = request.headers.get('origin')
+
+  if (isOriginAllowed(origin)) {
+    response.headers.set('Access-Control-Allow-Origin', origin || '*')
+    response.headers.set('Access-Control-Allow-Credentials', 'true')
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-Requested-With')
+    response.headers.set('Access-Control-Expose-Headers', 'X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset')
+    response.headers.set('Access-Control-Max-Age', '86400')
+  }
+}
+
+// Add security headers
+function addSecurityHeaders(response: NextResponse): void {
+  response.headers.set('X-Request-ID', crypto.randomUUID())
+}
+
+// Handle OPTIONS preflight requests for API routes
+function handlePreflight(request: NextRequest): NextResponse | null {
+  if (request.method === 'OPTIONS' && request.nextUrl.pathname.startsWith('/api/')) {
+    const response = new NextResponse(null, { status: 204 })
+    addCorsHeaders(response, request)
+    return response
+  }
+  return null
+}
 
 export default withAuth(
   function middleware(req) {
+    // Handle CORS preflight first
+    const preflightResponse = handlePreflight(req)
+    if (preflightResponse) {
+      return preflightResponse
+    }
+
     const token = req.nextauth.token
     const path = req.nextUrl.pathname
+
+    // Create base response
+    const response = NextResponse.next()
+
+    // Add CORS headers for API routes
+    if (path.startsWith('/api/')) {
+      addCorsHeaders(response, req)
+      addSecurityHeaders(response)
+    }
+
+    // Skip role checks for API routes (handled in the API itself)
+    if (path.startsWith('/api/')) {
+      return response
+    }
 
     // Admin-only routes
     const adminRoutes = ['/admin', '/users']
@@ -34,27 +121,39 @@ export default withAuth(
       }
     }
 
-    return NextResponse.next()
+    return response
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized: ({ token, req }) => {
+        // Allow API routes without auth check here (auth handled in route)
+        if (req.nextUrl.pathname.startsWith('/api/')) {
+          return true
+        }
+        return !!token
+      },
     },
   }
 )
 
 export const config = {
   matcher: [
+    // Protected dashboard routes
     '/dashboard/:path*',
     '/budgets/:path*',
     '/tenders/:path*',
     '/inventory/:path*',
     '/customers/:path*',
+    '/suppliers/:path*',
     '/expenses/:path*',
     '/invoices/:path*',
     '/reports/:path*',
     '/settings/:path*',
     '/admin/:path*',
     '/users/:path*',
+    '/documents/:path*',
+    '/forecasts/:path*',
+    // API routes for CORS
+    '/api/:path*',
   ],
 }
