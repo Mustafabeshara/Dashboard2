@@ -5,7 +5,7 @@
  */
 
 import prisma from '@/lib/prisma';
-import { createDecipheriv, scryptSync } from 'crypto';
+import { createDecipheriv, scryptSync, createHash } from 'crypto';
 
 // Cache for API keys to avoid repeated database calls
 let apiKeyCache: Map<string, string> | null = null;
@@ -13,11 +13,33 @@ let cacheTimestamp: number = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Encryption config (must match api-keys route.ts)
-const ENCRYPTION_KEY = process.env.NEXTAUTH_SECRET || 'fallback-key-for-development-only';
 const ALGORITHM = 'aes-256-gcm';
 
+/**
+ * Get encryption key - derives a secure key from the secret
+ * Uses a deterministic salt derived from the secret itself for consistency
+ */
+function getEncryptionSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+
+  if (process.env.NODE_ENV === 'production' && !secret) {
+    throw new Error('NEXTAUTH_SECRET is required for API key encryption in production');
+  }
+
+  return secret || 'development-fallback-key-not-for-production';
+}
+
+/**
+ * Derive encryption key with proper salt
+ * The salt is derived from the secret to ensure consistency across restarts
+ */
 function getKey(): Buffer {
-  return scryptSync(ENCRYPTION_KEY, 'salt', 32);
+  const secret = getEncryptionSecret();
+  // Create a deterministic salt from the secret hash (first 16 bytes)
+  // This is more secure than a static 'salt' string
+  const saltSource = createHash('sha256').update(secret + '-api-key-salt').digest();
+  const salt = saltSource.slice(0, 16);
+  return scryptSync(secret, salt, 32);
 }
 
 function decrypt(encryptedData: string): string {

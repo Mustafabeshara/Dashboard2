@@ -137,6 +137,12 @@ export const RateLimitPresets = {
     maxRequests: 20,
     message: 'Too many uploads. Please try again later.',
   },
+  // AI endpoints - protect against abuse and high API costs
+  AI: {
+    windowMs: 60 * 60 * 1000, // 1 hour
+    maxRequests: 30, // 30 AI requests per hour per user
+    message: 'AI request limit reached. Please try again later to avoid excessive API costs.',
+  },
 }
 
 // Middleware helper

@@ -6,6 +6,7 @@
 import { getRecommendedProvider, invokeUnifiedLLM } from '@/lib/ai/llm-provider';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { rateLimiter, RateLimitPresets } from '@/lib/rate-limit';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -74,6 +75,25 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Apply AI rate limiting per user
+    const rateLimit = rateLimiter.check(request, RateLimitPresets.AI, `ai:${session.user.id}`);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: RateLimitPresets.AI.message,
+          retryAfter: Math.ceil((rateLimit.resetTime - Date.now()) / 1000),
+        },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': String(RateLimitPresets.AI.maxRequests),
+            'X-RateLimit-Remaining': String(rateLimit.remaining),
+            'X-RateLimit-Reset': String(rateLimit.resetTime),
+          },
+        }
+      );
     }
 
     // Fetch current inventory with product details

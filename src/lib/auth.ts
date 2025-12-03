@@ -8,6 +8,30 @@ import prisma from './prisma'
 import type { UserRole } from '@/types'
 
 /**
+ * Get NextAuth secret - fails in production if not set
+ */
+function getNextAuthSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET
+
+  // In production, require a proper secret
+  if (process.env.NODE_ENV === 'production') {
+    if (!secret) {
+      throw new Error('NEXTAUTH_SECRET environment variable is required in production')
+    }
+    if (secret.length < 32) {
+      throw new Error('NEXTAUTH_SECRET must be at least 32 characters long')
+    }
+    return secret
+  }
+
+  // In development, use fallback but warn
+  if (!secret) {
+    console.warn('⚠️ NEXTAUTH_SECRET not set - using development fallback. Set this in production!')
+  }
+  return secret || 'development-only-secret-key-minimum-32-chars-do-not-use-in-production'
+}
+
+/**
  * Extended session user type
  */
 declare module 'next-auth' {
@@ -142,7 +166,48 @@ export const authOptions: NextAuthOptions = {
   jwt: {
     maxAge: 8 * 60 * 60, // 8 hours
   },
-  secret: process.env.NEXTAUTH_SECRET || 'development-secret-key-that-is-long-enough-for-nextauth-requirements-minimum-32-characters-for-testing-purposes-only-change-in-production-123456789012345678901234567890',
+  secret: getNextAuthSecret(),
+}
+
+/**
+ * Password validation schema
+ * Enforces minimum security requirements
+ */
+export const PASSWORD_REQUIREMENTS = {
+  minLength: 8,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumber: true,
+  requireSpecial: false, // Optional: set to true for stricter requirements
+}
+
+/**
+ * Validate password against security requirements
+ */
+export function validatePassword(password: string): { valid: boolean; errors: string[] } {
+  const errors: string[] = []
+
+  if (password.length < PASSWORD_REQUIREMENTS.minLength) {
+    errors.push(`Password must be at least ${PASSWORD_REQUIREMENTS.minLength} characters long`)
+  }
+
+  if (PASSWORD_REQUIREMENTS.requireUppercase && !/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter')
+  }
+
+  if (PASSWORD_REQUIREMENTS.requireLowercase && !/[a-z]/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter')
+  }
+
+  if (PASSWORD_REQUIREMENTS.requireNumber && !/[0-9]/.test(password)) {
+    errors.push('Password must contain at least one number')
+  }
+
+  if (PASSWORD_REQUIREMENTS.requireSpecial && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    errors.push('Password must contain at least one special character')
+  }
+
+  return { valid: errors.length === 0, errors }
 }
 
 /**
