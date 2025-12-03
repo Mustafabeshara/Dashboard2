@@ -64,6 +64,7 @@ export {
   getUsageSummary,
   cleanupOldLogs,
   calculateCost,
+  getRateLimitConfig,
 } from './usage-tracker'
 export type {
   AIUsageData,
@@ -71,4 +72,7 @@ export type {
   ProviderStats,
   TaskTypeStats,
   DailyUsageStats,
+  RateLimitStatus,
+  UsageLogEntry,
+  PaginatedLogs,
 } from './usage-tracker'

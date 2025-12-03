@@ -5,6 +5,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
+import { PROVIDER_COSTS, AI_PROVIDERS } from './config'
 
 export interface AIUsageData {
   provider: string
@@ -32,6 +33,7 @@ export interface UsageStats {
   byTaskType: TaskTypeStats[]
   dailyUsage: DailyUsageStats[]
   estimatedCost: number
+  rateLimits?: RateLimitStatus[]
 }
 
 export interface ProviderStats {
@@ -59,24 +61,45 @@ export interface DailyUsageStats {
   successRate: number
 }
 
-// Cost per 1000 tokens (approximate)
-const TOKEN_COSTS: Record<string, { input: number; output: number }> = {
-  'Groq': { input: 0.0001, output: 0.0002 },
-  'Gemini': { input: 0.00025, output: 0.0005 },
-  'Google AI Studio': { input: 0.00025, output: 0.0005 },
-  'Claude (Anthropic)': { input: 0.00025, output: 0.00125 },
+export interface RateLimitStatus {
+  provider: string
+  dailyLimit: number
+  minuteLimit: number
+  isEnabled: boolean
+}
+
+// Map provider display names to config keys for cost lookup
+const PROVIDER_KEY_MAP: Record<string, string> = {
+  'Groq': 'groq',
+  'Gemini': 'gemini',
+  'Google AI Studio': 'googleAI',
+  'Claude (Anthropic)': 'anthropic',
 }
 
 /**
  * Calculate estimated cost for token usage
+ * Uses centralized PROVIDER_COSTS from config.ts
  */
 export function calculateCost(
   provider: string,
   promptTokens: number,
   completionTokens: number
 ): number {
-  const costs = TOKEN_COSTS[provider] || { input: 0.0003, output: 0.0006 }
-  return (promptTokens / 1000) * costs.input + (completionTokens / 1000) * costs.output
+  const providerKey = PROVIDER_KEY_MAP[provider] || provider.toLowerCase()
+  const costs = PROVIDER_COSTS[providerKey] || { prompt: 0.0003, completion: 0.0006 }
+  return (promptTokens / 1000) * costs.prompt + (completionTokens / 1000) * costs.completion
+}
+
+/**
+ * Get rate limit configuration for all providers
+ */
+export function getRateLimitConfig(): RateLimitStatus[] {
+  return Object.values(AI_PROVIDERS).map((provider) => ({
+    provider: provider.name,
+    dailyLimit: provider.rateLimitPerDay,
+    minuteLimit: provider.rateLimitPerMinute,
+    isEnabled: provider.isEnabled,
+  }))
 }
 
 /**
@@ -245,13 +268,7 @@ export async function getUsageStats(
   }
 }
 
-/**
- * Get recent AI usage logs
- */
-export async function getRecentUsageLogs(
-  limit: number = 50,
-  userId?: string
-): Promise<{
+export interface UsageLogEntry {
   id: string
   provider: string
   model: string
@@ -264,35 +281,99 @@ export async function getRecentUsageLogs(
   errorMessage: string | null
   taskType: string | null
   createdAt: Date
-}[]> {
-  return prisma.aIUsageLog.findMany({
-    where: userId ? { userId } : undefined,
-    orderBy: { createdAt: 'desc' },
-    take: limit,
-    select: {
-      id: true,
-      provider: true,
-      model: true,
-      endpoint: true,
-      promptTokens: true,
-      completionTokens: true,
-      totalTokens: true,
-      latencyMs: true,
-      success: true,
-      errorMessage: true,
-      taskType: true,
-      createdAt: true,
-    },
-  })
+}
+
+export interface PaginatedLogs {
+  logs: UsageLogEntry[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
 }
 
 /**
- * Get usage summary for quick display
+ * Get recent AI usage logs with pagination
+ */
+export async function getRecentUsageLogs(
+  limit: number = 50,
+  offset: number = 0,
+  userId?: string
+): Promise<PaginatedLogs> {
+  const whereClause = userId ? { userId } : undefined
+
+  const [logs, total] = await Promise.all([
+    prisma.aIUsageLog.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
+      select: {
+        id: true,
+        provider: true,
+        model: true,
+        endpoint: true,
+        promptTokens: true,
+        completionTokens: true,
+        totalTokens: true,
+        latencyMs: true,
+        success: true,
+        errorMessage: true,
+        taskType: true,
+        createdAt: true,
+      },
+    }),
+    prisma.aIUsageLog.count({ where: whereClause }),
+  ])
+
+  return {
+    logs,
+    total,
+    page: Math.floor(offset / limit) + 1,
+    pageSize: limit,
+    totalPages: Math.ceil(total / limit),
+  }
+}
+
+/**
+ * Get aggregated stats for a date range using efficient database queries
+ */
+async function getAggregatedStats(startDate: Date, endDate: Date): Promise<{
+  requests: number
+  tokens: number
+  promptTokens: number
+  completionTokens: number
+}> {
+  const result = await prisma.aIUsageLog.aggregate({
+    where: {
+      createdAt: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    _count: { id: true },
+    _sum: {
+      totalTokens: true,
+      promptTokens: true,
+      completionTokens: true,
+    },
+  })
+
+  return {
+    requests: result._count.id || 0,
+    tokens: result._sum.totalTokens || 0,
+    promptTokens: result._sum.promptTokens || 0,
+    completionTokens: result._sum.completionTokens || 0,
+  }
+}
+
+/**
+ * Get usage summary for quick display - optimized with database aggregation
  */
 export async function getUsageSummary(): Promise<{
   today: { requests: number; tokens: number; cost: number }
   thisWeek: { requests: number; tokens: number; cost: number }
   thisMonth: { requests: number; tokens: number; cost: number }
+  rateLimits: RateLimitStatus[]
 }> {
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -300,28 +381,33 @@ export async function getUsageSummary(): Promise<{
   weekStart.setDate(weekStart.getDate() - 7)
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-  const [todayStats, weekStats, monthStats] = await Promise.all([
-    getUsageStats(todayStart, now),
-    getUsageStats(weekStart, now),
-    getUsageStats(monthStart, now),
+  // Use optimized aggregation queries instead of fetching all logs
+  const [todayAgg, weekAgg, monthAgg] = await Promise.all([
+    getAggregatedStats(todayStart, now),
+    getAggregatedStats(weekStart, now),
+    getAggregatedStats(monthStart, now),
   ])
+
+  // Calculate average cost using default rates (actual cost calculation needs provider breakdown)
+  const avgCostPerToken = 0.0004 / 1000 // Average cost per token
 
   return {
     today: {
-      requests: todayStats.totalRequests,
-      tokens: todayStats.totalTokens,
-      cost: todayStats.estimatedCost,
+      requests: todayAgg.requests,
+      tokens: todayAgg.tokens,
+      cost: Math.round(todayAgg.tokens * avgCostPerToken * 10000) / 10000,
     },
     thisWeek: {
-      requests: weekStats.totalRequests,
-      tokens: weekStats.totalTokens,
-      cost: weekStats.estimatedCost,
+      requests: weekAgg.requests,
+      tokens: weekAgg.tokens,
+      cost: Math.round(weekAgg.tokens * avgCostPerToken * 10000) / 10000,
     },
     thisMonth: {
-      requests: monthStats.totalRequests,
-      tokens: monthStats.totalTokens,
-      cost: monthStats.estimatedCost,
+      requests: monthAgg.requests,
+      tokens: monthAgg.tokens,
+      cost: Math.round(monthAgg.tokens * avgCostPerToken * 10000) / 10000,
     },
+    rateLimits: getRateLimitConfig(),
   }
 }
 
