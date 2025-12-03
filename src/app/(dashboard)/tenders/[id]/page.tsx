@@ -7,6 +7,7 @@
 
 import { TenderItems } from '@/components/tender/TenderItems';
 import { TenderParticipants } from '@/components/tender/TenderParticipants';
+import { TenderSubmissionDocuments } from '@/components/tender/TenderSubmissionDocuments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -657,6 +658,16 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
             tenderId={tender.id}
             tenderStatus={tender.status}
             submissionDeadline={tender.submissionDeadline}
+          />
+
+          {/* Submission Documents */}
+          <TenderSubmissionDocuments
+            tenderId={tender.id}
+            tenderNumber={tender.tenderNumber}
+            tenderStatus={tender.status}
+            isReadOnly={
+              tender.status === 'WON' || tender.status === 'LOST' || tender.status === 'CANCELLED'
+            }
           />
 
           {/* Products/Items (Legacy - for old tenders) */}
