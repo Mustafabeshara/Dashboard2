@@ -3,7 +3,12 @@
  * Ported from Dashboard repository
  */
 
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // Initialize S3 client
@@ -36,15 +41,13 @@ export async function storagePut(
     Key: key,
     Body: data,
     ContentType: contentType,
-    ACL: 'public-read', // Make files publicly accessible
+    ACL: 'private', // Keep files private - use signed URLs for access
   });
 
   await s3Client.send(command);
 
-  // Generate public URL
-  const url = process.env.S3_ENDPOINT
-    ? `${process.env.S3_ENDPOINT}/${BUCKET_NAME}/${key}`
-    : `https://${BUCKET_NAME}.s3.${process.env.S3_REGION || 'us-east-1'}.amazonaws.com/${key}`;
+  // Generate a signed URL for secure access (expires in 15 minutes)
+  const url = await storageGetSignedUrl(key, 900);
 
   return { url, key };
 }
@@ -68,10 +71,7 @@ export async function storageDelete(key: string): Promise<void> {
 /**
  * Get a signed URL for temporary access to a private file
  */
-export async function storageGetSignedUrl(
-  key: string,
-  expiresIn: number = 3600
-): Promise<string> {
+export async function storageGetSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
   if (!BUCKET_NAME) {
     throw new Error('S3_BUCKET_NAME environment variable is not set');
   }

@@ -10,17 +10,18 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypt
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Encryption helpers using AES-256-GCM
+// Encryption helpers using AES-256-GCM with random salt per encryption
 const ENCRYPTION_KEY = process.env.NEXTAUTH_SECRET || 'fallback-key-for-development-only';
 const ALGORITHM = 'aes-256-gcm';
 
-function getKey(): Buffer {
-  return scryptSync(ENCRYPTION_KEY, 'salt', 32);
+function getKey(salt: Buffer): Buffer {
+  return scryptSync(ENCRYPTION_KEY, salt, 32);
 }
 
 function encrypt(text: string): string {
   const iv = randomBytes(16);
-  const key = getKey();
+  const salt = randomBytes(32); // Generate random salt for each encryption
+  const key = getKey(salt);
   const cipher = createCipheriv(ALGORITHM, key, iv);
 
   let encrypted = cipher.update(text, 'utf8', 'hex');
@@ -28,17 +29,18 @@ function encrypt(text: string): string {
 
   const authTag = cipher.getAuthTag();
 
-  // Return iv:authTag:encrypted
-  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+  // Return salt:iv:authTag:encrypted
+  return `${salt.toString('hex')}:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
 }
 
 function decrypt(encryptedData: string): string {
   try {
-    const [ivHex, authTagHex, encrypted] = encryptedData.split(':');
+    const [saltHex, ivHex, authTagHex, encrypted] = encryptedData.split(':');
 
+    const salt = Buffer.from(saltHex, 'hex');
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
-    const key = getKey();
+    const key = getKey(salt);
 
     const decipher = createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
@@ -58,8 +60,17 @@ function maskKey(key: string): string {
   return `${key.slice(0, 4)}${'•'.repeat(Math.min(key.length - 8, 20))}${key.slice(-4)}`;
 }
 
+// API key setting interface
+interface ApiKeySetting {
+  key: string;
+  label: string;
+  description: string;
+  category: string;
+  isSecret?: boolean;
+}
+
 // Valid API key settings
-const API_KEY_SETTINGS = [
+const API_KEY_SETTINGS: ApiKeySetting[] = [
   // AI Providers
   {
     key: 'GROQ_API_KEY',
@@ -73,7 +84,12 @@ const API_KEY_SETTINGS = [
     description: 'Google Gemini for vision/PDF processing',
     category: 'ai',
   },
-  { key: 'OPENAI_API_KEY', label: 'OpenAI API Key', description: 'OpenAI fallback provider', category: 'ai' },
+  {
+    key: 'OPENAI_API_KEY',
+    label: 'OpenAI API Key',
+    description: 'OpenAI fallback provider',
+    category: 'ai',
+  },
   {
     key: 'ANTHROPIC_API_KEY',
     label: 'Anthropic API Key',
@@ -87,8 +103,18 @@ const API_KEY_SETTINGS = [
     description: 'Google Cloud Vision for OCR (scanned documents)',
     category: 'ocr',
   },
-  { key: 'AWS_ACCESS_KEY_ID', label: 'AWS Access Key ID', description: 'AWS Textract for OCR', category: 'ocr' },
-  { key: 'AWS_SECRET_ACCESS_KEY', label: 'AWS Secret Key', description: 'AWS secret access key', category: 'ocr' },
+  {
+    key: 'AWS_ACCESS_KEY_ID',
+    label: 'AWS Access Key ID',
+    description: 'AWS Textract for OCR',
+    category: 'ocr',
+  },
+  {
+    key: 'AWS_SECRET_ACCESS_KEY',
+    label: 'AWS Secret Key',
+    description: 'AWS secret access key',
+    category: 'ocr',
+  },
   {
     key: 'AWS_REGION',
     label: 'AWS Region',
@@ -164,7 +190,7 @@ export async function GET() {
       let masked = '';
 
       // Check if this field should be treated as secret (default true)
-      const isSecretField = (setting as any).isSecret !== false;
+      const isSecretField = setting.isSecret !== false;
 
       // PRIORITY 1: Check environment variable first (Railway/production)
       if (envValue && envValue.length > 0) {
@@ -199,7 +225,7 @@ export async function GET() {
         source,
         maskedValue: masked,
         isSecret: isSecretField,
-        category: (setting as any).category || 'other',
+        category: setting.category || 'other',
       };
     });
 
@@ -239,7 +265,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Encrypt sensitive values (check if field has isSecret: false explicitly)
-    const isSecret = (settingConfig as any).isSecret !== false;
+    const isSecret = settingConfig.isSecret !== false;
     const storedValue = isSecret ? encrypt(value) : value;
 
     // Upsert the setting
