@@ -25,34 +25,124 @@ interface EmailOptions {
   attachments?: any[]
 }
 
+// SMTP presets for common providers
+const SMTP_PRESETS: Record<string, { host: string; port: number; secure: boolean }> = {
+  gmail: { host: 'smtp.gmail.com', port: 587, secure: false },
+  yahoo: { host: 'smtp.mail.yahoo.com', port: 587, secure: false },
+  outlook: { host: 'smtp.office365.com', port: 587, secure: false },
+  hotmail: { host: 'smtp.live.com', port: 587, secure: false },
+}
+
 class EmailManager {
   private transporter: any
+  private fromAddress: string = ''
 
   constructor() {
     this.initializeTransporter()
   }
 
+  async reinitialize() {
+    // Clear existing transporter and reinitialize with fresh config
+    this.transporter = null
+    await this.initializeTransporterFromDatabase()
+  }
+
+  private async initializeTransporterFromDatabase() {
+    try {
+      // Try to get email settings from database first
+      const { getApiKey } = await import('./ai/api-keys')
+
+      const host = await getApiKey('EMAIL_HOST')
+      const port = await getApiKey('EMAIL_PORT')
+      const user = await getApiKey('EMAIL_USER')
+      const password = await getApiKey('EMAIL_PASSWORD')
+      const from = await getApiKey('EMAIL_FROM')
+
+      if (host && user && password) {
+        this.transporter = nodemailer.createTransport({
+          host: host,
+          port: parseInt(port || '587', 10),
+          secure: port === '465', // true for 465, false for other ports
+          auth: {
+            user: user,
+            pass: password,
+          },
+        })
+        this.fromAddress = from || user
+        logger.info('Email transporter initialized from database settings', { host })
+        return true
+      }
+    } catch (error) {
+      logger.debug('Could not load email settings from database', error as Error)
+    }
+    return false
+  }
+
   private initializeTransporter() {
+    const emailHost = process.env.EMAIL_HOST
+    const emailPort = process.env.EMAIL_PORT
     const emailUser = process.env.EMAIL_USER
     const emailPassword = process.env.EMAIL_PASSWORD
+    const emailFrom = process.env.EMAIL_FROM
 
     if (!emailUser || !emailPassword) {
       logger.warn('Email credentials not configured, emails will not be sent')
+      // Try to load from database later
+      this.initializeTransporterFromDatabase()
+      return
+    }
+
+    // Determine SMTP settings
+    let host = emailHost
+    let port = parseInt(emailPort || '587', 10)
+    let secure = port === 465
+
+    // Auto-detect provider from email address if no host specified
+    if (!host && emailUser) {
+      const domain = emailUser.split('@')[1]?.toLowerCase()
+      if (domain?.includes('gmail')) {
+        const preset = SMTP_PRESETS.gmail
+        host = preset.host
+        port = preset.port
+        secure = preset.secure
+      } else if (domain?.includes('yahoo')) {
+        const preset = SMTP_PRESETS.yahoo
+        host = preset.host
+        port = preset.port
+        secure = preset.secure
+      } else if (domain?.includes('outlook') || domain?.includes('hotmail') || domain?.includes('live')) {
+        const preset = SMTP_PRESETS.outlook
+        host = preset.host
+        port = preset.port
+        secure = preset.secure
+      }
+    }
+
+    if (!host) {
+      logger.warn('Email host not configured and could not be auto-detected')
       return
     }
 
     this.transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: host,
+      port: port,
+      secure: secure,
       auth: {
         user: emailUser,
         pass: emailPassword,
       },
     })
 
-    logger.info('Email transporter initialized')
+    this.fromAddress = emailFrom || emailUser
+    logger.info('Email transporter initialized', { host, port })
   }
 
   async send(options: EmailOptions): Promise<boolean> {
+    // Try to reinitialize if transporter is not set
+    if (!this.transporter) {
+      await this.initializeTransporterFromDatabase()
+    }
+
     if (!this.transporter) {
       logger.warn('Email transporter not initialized, skipping email')
       return false
@@ -62,7 +152,7 @@ class EmailManager {
       const recipients = Array.isArray(options.to) ? options.to.join(', ') : options.to
 
       const info = await this.transporter.sendMail({
-        from: `"Dashboard2 System" <${process.env.EMAIL_USER}>`,
+        from: this.fromAddress ? `"Medical Dashboard" <${this.fromAddress}>` : `"Medical Dashboard" <${process.env.EMAIL_USER}>`,
         to: recipients,
         subject: options.subject,
         text: options.text,

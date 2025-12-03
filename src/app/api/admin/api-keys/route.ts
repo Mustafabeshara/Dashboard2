@@ -60,29 +60,76 @@ function maskKey(key: string): string {
 
 // Valid API key settings
 const API_KEY_SETTINGS = [
+  // AI Providers
   {
     key: 'GROQ_API_KEY',
     label: 'Groq API Key',
     description: 'Primary AI provider for fast extraction',
+    category: 'ai',
   },
   {
     key: 'GEMINI_API_KEY',
     label: 'Gemini API Key',
     description: 'Google Gemini for vision/PDF processing',
+    category: 'ai',
   },
-  { key: 'OPENAI_API_KEY', label: 'OpenAI API Key', description: 'OpenAI fallback provider' },
+  { key: 'OPENAI_API_KEY', label: 'OpenAI API Key', description: 'OpenAI fallback provider', category: 'ai' },
   {
     key: 'ANTHROPIC_API_KEY',
     label: 'Anthropic API Key',
     description: 'Claude AI fallback provider',
+    category: 'ai',
   },
-  { key: 'AWS_ACCESS_KEY_ID', label: 'AWS Access Key ID', description: 'AWS Textract for OCR' },
-  { key: 'AWS_SECRET_ACCESS_KEY', label: 'AWS Secret Key', description: 'AWS secret access key' },
+  // OCR Providers
+  {
+    key: 'GOOGLE_VISION_API_KEY',
+    label: 'Google Vision API Key',
+    description: 'Google Cloud Vision for OCR (scanned documents)',
+    category: 'ocr',
+  },
+  { key: 'AWS_ACCESS_KEY_ID', label: 'AWS Access Key ID', description: 'AWS Textract for OCR', category: 'ocr' },
+  { key: 'AWS_SECRET_ACCESS_KEY', label: 'AWS Secret Key', description: 'AWS secret access key', category: 'ocr' },
   {
     key: 'AWS_REGION',
     label: 'AWS Region',
     description: 'AWS region (e.g., us-east-1)',
     isSecret: false,
+    category: 'ocr',
+  },
+  // Email Configuration
+  {
+    key: 'EMAIL_HOST',
+    label: 'SMTP Host',
+    description: 'Email server hostname (e.g., smtp.mail.yahoo.com)',
+    isSecret: false,
+    category: 'email',
+  },
+  {
+    key: 'EMAIL_PORT',
+    label: 'SMTP Port',
+    description: 'Email server port (587 for TLS, 465 for SSL)',
+    isSecret: false,
+    category: 'email',
+  },
+  {
+    key: 'EMAIL_USER',
+    label: 'Email Username',
+    description: 'Your email address for authentication',
+    isSecret: false,
+    category: 'email',
+  },
+  {
+    key: 'EMAIL_PASSWORD',
+    label: 'Email App Password',
+    description: 'App-specific password (not your regular password)',
+    category: 'email',
+  },
+  {
+    key: 'EMAIL_FROM',
+    label: 'From Address',
+    description: 'Sender email address for notifications',
+    isSecret: false,
+    category: 'email',
   },
 ];
 
@@ -116,6 +163,9 @@ export async function GET() {
       let source: 'database' | 'environment' | 'not_set' = 'not_set';
       let masked = '';
 
+      // Check if this field should be treated as secret (default true)
+      const isSecretField = (setting as any).isSecret !== false;
+
       // PRIORITY 1: Check environment variable first (Railway/production)
       if (envValue && envValue.length > 0) {
         // Don't show placeholder values
@@ -124,10 +174,10 @@ export async function GET() {
           lowerEnv.includes(p)
         );
 
-        if (!isPlaceholder && envValue.length > 10) {
+        if (!isPlaceholder && envValue.length > 0) {
           value = envValue;
           source = 'environment';
-          masked = setting.key === 'AWS_REGION' ? value : maskKey(envValue);
+          masked = isSecretField ? maskKey(envValue) : envValue;
         }
       }
 
@@ -137,7 +187,7 @@ export async function GET() {
         if (decrypted && decrypted.length > 0) {
           value = decrypted;
           source = 'database';
-          masked = setting.key === 'AWS_REGION' ? value : maskKey(decrypted);
+          masked = isSecretField ? maskKey(decrypted) : decrypted;
         }
       }
 
@@ -148,7 +198,8 @@ export async function GET() {
         isSet: !!value,
         source,
         maskedValue: masked,
-        isSecret: setting.key !== 'AWS_REGION',
+        isSecret: isSecretField,
+        category: (setting as any).category || 'other',
       };
     });
 
@@ -187,8 +238,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'API key removed' });
     }
 
-    // Encrypt sensitive values
-    const isSecret = key !== 'AWS_REGION';
+    // Encrypt sensitive values (check if field has isSecret: false explicitly)
+    const isSecret = (settingConfig as any).isSecret !== false;
     const storedValue = isSecret ? encrypt(value) : value;
 
     // Upsert the setting

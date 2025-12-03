@@ -15,10 +15,12 @@ import {
   EyeOff,
   Key,
   Loader2,
+  Mail,
   Monitor,
   Moon,
   Palette,
   Save,
+  Scan,
   Sun,
   Trash2,
   XCircle,
@@ -34,6 +36,7 @@ interface ApiKeySetting {
   source: 'database' | 'environment' | 'not_set';
   maskedValue: string;
   isSecret: boolean;
+  category?: 'ai' | 'ocr' | 'email' | 'other';
 }
 
 interface NotificationPreferences {
@@ -635,18 +638,14 @@ export default function SettingsPage() {
                 )}
                 {apiKeys.length > 0 ? (
                   <div className="space-y-4">
-                    {/* Group AI providers */}
+                    {/* AI Providers */}
                     <div className="space-y-3">
-                      <h4 className="text-sm font-medium text-gray-700">AI Providers</h4>
+                      <div className="flex items-center gap-2">
+                        <Key className="w-4 h-4 text-blue-600" />
+                        <h4 className="text-sm font-medium text-gray-700">AI Providers</h4>
+                      </div>
                       {apiKeys
-                        .filter(k =>
-                          [
-                            'GROQ_API_KEY',
-                            'GEMINI_API_KEY',
-                            'OPENAI_API_KEY',
-                            'ANTHROPIC_API_KEY',
-                          ].includes(k.key)
-                        )
+                        .filter(k => k.category === 'ai')
                         .map(setting => (
                           <ApiKeyInput
                             key={setting.key}
@@ -658,11 +657,39 @@ export default function SettingsPage() {
                         ))}
                     </div>
 
-                    {/* AWS credentials */}
+                    {/* OCR Providers */}
                     <div className="space-y-3 pt-4 border-t">
-                      <h4 className="text-sm font-medium text-gray-700">AWS (for OCR/Textract)</h4>
+                      <div className="flex items-center gap-2">
+                        <Scan className="w-4 h-4 text-purple-600" />
+                        <h4 className="text-sm font-medium text-gray-700">OCR Providers (for scanned documents)</h4>
+                      </div>
                       {apiKeys
-                        .filter(k => k.key.startsWith('AWS_'))
+                        .filter(k => k.category === 'ocr')
+                        .map(setting => (
+                          <ApiKeyInput
+                            key={setting.key}
+                            setting={setting}
+                            onSave={handleSave}
+                            onDelete={handleDelete}
+                            saving={saving}
+                          />
+                        ))}
+                    </div>
+
+                    {/* Email Configuration */}
+                    <div className="space-y-3 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-green-600" />
+                        <h4 className="text-sm font-medium text-gray-700">Email Configuration (SMTP)</h4>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm mb-3">
+                        <p className="text-amber-800">
+                          <strong>Yahoo Mail Setup:</strong> Use <code>smtp.mail.yahoo.com</code> as host, port <code>587</code>,
+                          and generate an App Password in Yahoo Account Security settings.
+                        </p>
+                      </div>
+                      {apiKeys
+                        .filter(k => k.category === 'email')
                         .map(setting => (
                           <ApiKeyInput
                             key={setting.key}

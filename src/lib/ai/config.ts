@@ -4,27 +4,27 @@
  */
 
 export interface AIProviderConfig {
-  name: string
-  apiKey: string | undefined
-  baseUrl?: string
-  model: string
-  maxTokens: number
-  temperature: number
-  rateLimitPerDay: number
-  rateLimitPerMinute: number
-  priority: number // Lower = higher priority
-  isEnabled: boolean
-  supportsVision: boolean
-  supportsArabic: boolean
+  name: string;
+  apiKey: string | undefined;
+  baseUrl?: string;
+  model: string;
+  maxTokens: number;
+  temperature: number;
+  rateLimitPerDay: number;
+  rateLimitPerMinute: number;
+  priority: number; // Lower = higher priority
+  isEnabled: boolean;
+  supportsVision: boolean;
+  supportsArabic: boolean;
 }
 
 export interface AIServiceConfig {
-  providers: AIProviderConfig[]
-  defaultTimeout: number
-  retryAttempts: number
-  retryDelay: number
-  cacheEnabled: boolean
-  cacheTTL: number // seconds
+  providers: AIProviderConfig[];
+  defaultTimeout: number;
+  retryAttempts: number;
+  retryDelay: number;
+  cacheEnabled: boolean;
+  cacheTTL: number; // seconds
 }
 
 // Provider configurations
@@ -85,43 +85,43 @@ export const AI_PROVIDERS: Record<string, AIProviderConfig> = {
     supportsVision: true,
     supportsArabic: true,
   },
-}
+};
 
 // Provider cost per 1K tokens (approximate in USD)
 export const PROVIDER_COSTS: Record<string, { prompt: number; completion: number }> = {
   groq: { prompt: 0.0001, completion: 0.0001 },
-  gemini: { prompt: 0.00025, completion: 0.00050 },
-  googleAI: { prompt: 0.00050, completion: 0.00150 },
+  gemini: { prompt: 0.00025, completion: 0.0005 },
+  googleAI: { prompt: 0.0005, completion: 0.0015 },
   anthropic: { prompt: 0.00025, completion: 0.00125 },
-}
+};
 
 // Main configuration
 export const AI_CONFIG: AIServiceConfig = {
   providers: Object.values(AI_PROVIDERS)
-    .filter((p) => p.isEnabled)
+    .filter(p => p.isEnabled)
     .sort((a, b) => a.priority - b.priority),
   defaultTimeout: 30000, // 30 seconds
   retryAttempts: 3,
   retryDelay: 1000, // 1 second
   cacheEnabled: true,
   cacheTTL: 3600, // 1 hour
-}
+};
 
 /**
  * Validate AI provider API keys
  */
 export function validateAIProviders(): { valid: string[]; invalid: string[] } {
-  const results = { valid: [] as string[], invalid: [] as string[] }
-  
+  const results = { valid: [] as string[], invalid: [] as string[] };
+
   for (const [name, config] of Object.entries(AI_PROVIDERS)) {
     if (config.isEnabled && config.apiKey) {
-      results.valid.push(name)
+      results.valid.push(name);
     } else if (config.isEnabled && !config.apiKey) {
-      results.invalid.push(name)
+      results.invalid.push(name);
     }
   }
-  
-  return results
+
+  return results;
 }
 
 /**
@@ -132,13 +132,10 @@ export function estimateAICost(
   promptTokens: number,
   completionTokens: number
 ): number {
-  const costs = PROVIDER_COSTS[provider]
-  if (!costs) return 0
-  
-  return (
-    (promptTokens / 1000) * costs.prompt +
-    (completionTokens / 1000) * costs.completion
-  )
+  const costs = PROVIDER_COSTS[provider];
+  if (!costs) return 0;
+
+  return (promptTokens / 1000) * costs.prompt + (completionTokens / 1000) * costs.completion;
 }
 
 // Task-specific model recommendations
@@ -153,11 +150,11 @@ export const TASK_MODELS = {
   vision: ['gemini', 'googleAI', 'anthropic'],
   // Complex analysis
   complexAnalysis: ['googleAI', 'anthropic', 'gemini'],
-}
+};
 
 // Enhanced tender extraction prompt from Dashboard (proven with real MOH documents)
 export const TENDER_EXTRACTION_SYSTEM_PROMPT =
-  "You are an expert OCR and document extraction system specialized in medical tender documents. You excel at reading tables, mixed-language text (Arabic/English), and extracting structured data with high accuracy. Always return valid JSON without markdown formatting.";
+  'You are an expert OCR and document extraction system specialized in medical tender documents. You excel at reading tables, mixed-language text (Arabic/English), and extracting structured data with high accuracy. Always return valid JSON without markdown formatting.';
 
 export const TENDER_EXTRACTION_PROMPT = `You are an expert document OCR and data extraction system. Carefully analyze this tender document image/PDF.
 
@@ -195,9 +192,18 @@ Required JSON structure:
 
 Extraction Rules:
 
-1. REFERENCE NUMBER:
-   - Look for: "ملف رقم", "File No", "Tender No", "RFQ", "إستدراج عروض لملف رقم"
-   - Example: "5SSN11" from "إستدراج عروض لملف رقم: 5SSN11"
+1. REFERENCE NUMBER (CRITICAL - EXACT EXTRACTION REQUIRED):
+   - Look for these keywords EXACTLY:
+     * Arabic: "ملف رقم", "رقم الملف", "إستدراج عروض لملف رقم", "مناقصة رقم"
+     * English: "File No", "File No.", "Tender No", "Tender No.", "RFQ", "Reference No", "Ref:"
+   - Extract ONLY the alphanumeric code following these keywords
+   - Examples:
+     * "إستدراج عروض لملف رقم: 5SSN11" → "5SSN11"
+     * "File No: MOH-2025-123" → "MOH-2025-123"
+     * "Tender No. T-456/2025" → "T-456/2025"
+     * "ملف رقم 789ABC" → "789ABC"
+   - DO NOT include punctuation (:, ., etc.) in the reference
+   - DO NOT extract dates or other numbers as the reference
 
 2. TITLE:
    - Extract the main subject line (Arabic or English)
@@ -213,15 +219,27 @@ Extraction Rules:
    - Convert to YYYY-MM-DD format
    - Examples: "26/11/2025" → "2025-11-26", "26-11-2025" → "2025-11-26"
 
-5. ITEMS TABLE:
-   - Identify table with columns: SL No / ITEM DESCRIPTION / UNIT / QUANTITY
-   - Extract EVERY row from the table
-   - For item description: Include full text exactly as written, preserve technical terms
+5. ITEMS TABLE (EXTRACT EVERY SINGLE ROW AS SEPARATE ITEMS):
+   - Identify table with columns like: SL No / ITEM DESCRIPTION / UNIT / QUANTITY
+   - Extract EVERY row as a SEPARATE item in the items array
+   - DO NOT combine or summarize items - each row is one array item
+   - For item description: 
+     * Include full text exactly as written
+     * Preserve technical/medical terms
+     * Include any catalog numbers or codes
    - For quantity: Extract numeric value only
      * "600" → 600
      * "Six Hundred Only" → 600
      * "1,000" → 1000
-   - For unit: Extract as written (PCS, boxes, units, etc.)
+     * "2-3 units" → 3 (use higher number)
+   - For unit: Extract as written (PCS, pieces, boxes, units, sets, kits, etc.)
+   - IMPORTANT: If table has 50 rows, return 50 items in the array
+   - Example output structure:
+     "items": [
+       {"itemDescription": "Surgical Gloves Size 7", "quantity": 100, "unit": "boxes"},
+       {"itemDescription": "Syringes 5ml Sterile", "quantity": 500, "unit": "PCS"},
+       {"itemDescription": "Bandages Elastic 10cm", "quantity": 200, "unit": "units"}
+     ]
 
 6. NOTES:
    - Extract special requirements, instructions, or conditions
@@ -337,7 +355,7 @@ Return ONLY the JSON object, no additional text.`,
   "notes": "string"
 }
 Return ONLY the JSON object, no additional text.`,
-}
+};
 
 // Arabic to English field mapping for MOH Kuwait documents
 export const ARABIC_FIELD_MAPPING = {
@@ -351,6 +369,6 @@ export const ARABIC_FIELD_MAPPING = {
   'شروط التسليم': 'deliveryTerms',
   'شروط الدفع': 'paymentTerms',
   'وزارة الصحة': 'Ministry of Health',
-  'مستشفى': 'Hospital',
+  مستشفى: 'Hospital',
   'المركز الطبي': 'Medical Center',
-}
+};

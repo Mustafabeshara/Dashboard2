@@ -3,66 +3,65 @@
  * CRUD operations for tender management
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { prisma } from '@/lib/prisma'
-import { TenderStatus, Prisma } from '@prisma/client'
-import { cache, CacheKeys, CacheTTL } from '@/lib/cache'
-import { audit, AuditAction } from '@/lib/audit'
-import { WebSocketHelpers } from '@/lib/websocket'
-import { authOptions } from '@/lib/auth'
-import { requirePermission } from '@/lib/rbac'
-import { handleError, AuthenticationError } from '@/lib/errors/error-handler'
-import { withContext } from '@/lib/middleware/context'
-import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit'
+import { audit } from '@/lib/audit';
+import { authOptions } from '@/lib/auth';
+import { cache, CacheKeys, CacheTTL } from '@/lib/cache';
+import { AuthenticationError } from '@/lib/errors/error-handler';
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit';
+import { prisma } from '@/lib/prisma';
+import { requirePermission } from '@/lib/rbac';
+import { WebSocketHelpers } from '@/lib/websocket';
+import { Prisma, TenderStatus } from '@prisma/client';
+import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/tenders - List all tenders with filters
 export async function GET(request: NextRequest) {
   try {
     // Authentication check
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session) {
-      throw new AuthenticationError()
+      throw new AuthenticationError();
     }
 
     // Permission check
-    requirePermission(session, 'tenders', 'view')
+    requirePermission(session, 'tenders', 'view');
 
     // Rate limiting
-    const rateLimitResult = await rateLimit(RateLimitPresets.standard)(request)
-    if (rateLimitResult) return rateLimitResult
+    const rateLimitResult = await rateLimit(RateLimitPresets.standard)(request);
+    if (rateLimitResult) return rateLimitResult;
 
-    const { searchParams } = new URL(request.url)
-    
+    const { searchParams } = new URL(request.url);
+
     // Try cache first
-    const cacheKey = CacheKeys.tenders.list(Object.fromEntries(searchParams))
-    const cached = await cache.get(cacheKey)
+    const cacheKey = CacheKeys.tenders.list(Object.fromEntries(searchParams));
+    const cached = await cache.get(cacheKey);
     if (cached) {
-      return NextResponse.json(cached)
+      return NextResponse.json(cached);
     }
-    
+
     // Pagination
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
-    const skip = (page - 1) * limit
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const skip = (page - 1) * limit;
 
     // Filters
-    const status = searchParams.get('status') as TenderStatus | null
-    const customerId = searchParams.get('customerId')
-    const search = searchParams.get('search')
-    const showDeleted = searchParams.get('showDeleted') === 'true'
+    const status = searchParams.get('status') as TenderStatus | null;
+    const customerId = searchParams.get('customerId');
+    const search = searchParams.get('search');
+    const showDeleted = searchParams.get('showDeleted') === 'true';
 
     // Build where clause
     const where: Prisma.TenderWhereInput = {
       isDeleted: showDeleted ? undefined : false,
-    }
+    };
 
     if (status) {
-      where.status = status
+      where.status = status;
     }
 
     if (customerId) {
-      where.customerId = customerId
+      where.customerId = customerId;
     }
 
     if (search) {
@@ -71,11 +70,11 @@ export async function GET(request: NextRequest) {
         { title: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
         { department: { contains: search, mode: 'insensitive' } },
-      ]
+      ];
     }
 
     // Get total count
-    const total = await prisma.tender.count({ where })
+    const total = await prisma.tender.count({ where });
 
     // Get tenders
     const tenders = await prisma.tender.findMany({
@@ -96,13 +95,10 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: [
-        { submissionDeadline: 'asc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: [{ submissionDeadline: 'asc' }, { createdAt: 'desc' }],
       skip,
       take: limit,
-    })
+    });
 
     const response = {
       success: true,
@@ -113,18 +109,15 @@ export async function GET(request: NextRequest) {
         total,
         totalPages: Math.ceil(total / limit),
       },
-    }
+    };
 
     // Cache response
-    await cache.set(cacheKey, response, CacheTTL.MEDIUM)
+    await cache.set(cacheKey, response, CacheTTL.MEDIUM);
 
-    return NextResponse.json(response)
+    return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching tenders:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch tenders' },
-      { status: 500 }
-    )
+    console.error('Error fetching tenders:', error);
+    return NextResponse.json({ error: 'Failed to fetch tenders' }, { status: 500 });
   }
 }
 
@@ -132,19 +125,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authentication check
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions);
     if (!session) {
-      throw new AuthenticationError()
+      throw new AuthenticationError();
     }
 
     // Permission check
-    requirePermission(session, 'tenders', 'create')
+    requirePermission(session, 'tenders', 'create');
 
     // Rate limiting (stricter for mutations)
-    const rateLimitResult = await rateLimit(RateLimitPresets.strict)(request)
-    if (rateLimitResult) return rateLimitResult
+    const rateLimitResult = await rateLimit(RateLimitPresets.strict)(request);
+    if (rateLimitResult) return rateLimitResult;
 
-    const body = await request.json()
+    const body = await request.json();
 
     const {
       tenderNumber,
@@ -166,79 +159,96 @@ export async function POST(request: NextRequest) {
       bondAmount,
       createdById,
       notes,
-    } = body
+    } = body;
 
     // Validate required fields
     if (!tenderNumber || !title) {
-      return NextResponse.json(
-        { error: 'Tender number and title are required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Tender number and title are required' }, { status: 400 });
     }
 
     // Check if tender number already exists
     const existing = await prisma.tender.findUnique({
       where: { tenderNumber },
-    })
+    });
 
     if (existing) {
-      return NextResponse.json(
-        { error: 'Tender number already exists' },
-        { status: 409 }
-      )
+      return NextResponse.json({ error: 'Tender number already exists' }, { status: 409 });
     }
 
-    // Create tender
-    const tender = await prisma.tender.create({
-      data: {
-        tenderNumber,
-        title,
-        description,
-        customerId,
-        department,
-        category,
-        submissionDeadline: submissionDeadline ? new Date(submissionDeadline) : null,
-        openingDate: openingDate ? new Date(openingDate) : null,
-        estimatedValue,
-        currency,
-        status,
-        documents,
-        products,
-        technicalRequirements,
-        commercialRequirements,
-        bondRequired,
-        bondAmount,
-        createdById,
-        notes,
-      },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
+    // Create tender with items in a transaction
+    const tender = await prisma.$transaction(async tx => {
+      // Create the tender
+      const newTender = await tx.tender.create({
+        data: {
+          tenderNumber,
+          title,
+          description,
+          customerId,
+          department,
+          category,
+          submissionDeadline: submissionDeadline ? new Date(submissionDeadline) : null,
+          openingDate: openingDate ? new Date(openingDate) : null,
+          estimatedValue,
+          currency,
+          status,
+          documents,
+          products, // Keep for legacy support
+          technicalRequirements,
+          commercialRequirements,
+          bondRequired,
+          bondAmount,
+          createdById,
+          notes,
+        },
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
           },
         },
-        createdBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
-        },
-      },
-    })
+      });
 
-    console.log(`[Tender] Created tender: ${tender.id} (${tender.tenderNumber})`)
+      // If products array exists (from AI extraction), create TenderItems
+      if (products && Array.isArray(products) && products.length > 0) {
+        const itemsToCreate = products.map((product: any, index: number) => ({
+          tenderId: newTender.id,
+          itemNumber: index + 1,
+          description: product.itemDescription || product.name || '',
+          quantity: product.quantity || 1,
+          unit: product.unit || 'pcs',
+          specifications: product.specifications || null,
+          isParticipating: true,
+          estimatedPrice: product.estimatedPrice || null,
+        }));
+
+        await tx.tenderItem.createMany({
+          data: itemsToCreate,
+        });
+      }
+
+      return newTender;
+    });
+
+    console.log(`[Tender] Created tender: ${tender.id} (${tender.tenderNumber})`);
 
     // Clear cache
-    await cache.clear('tenders:list:')
+    await cache.clear('tenders:list:');
 
     // Audit trail
-    await audit.logCreate('Tender', tender.id, tender, createdById)
+    await audit.logCreate('Tender', tender.id, tender, createdById);
 
     // WebSocket notification
-    WebSocketHelpers.notifyTenderCreated(tender, createdById)
+    WebSocketHelpers.notifyTenderCreated(tender, createdById);
 
     return NextResponse.json(
       {
@@ -247,12 +257,9 @@ export async function POST(request: NextRequest) {
         message: 'Tender created successfully',
       },
       { status: 201 }
-    )
+    );
   } catch (error) {
-    console.error('Error creating tender:', error)
-    return NextResponse.json(
-      { error: 'Failed to create tender' },
-      { status: 500 }
-    )
+    console.error('Error creating tender:', error);
+    return NextResponse.json({ error: 'Failed to create tender' }, { status: 500 });
   }
 }

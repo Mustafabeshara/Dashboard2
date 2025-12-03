@@ -162,36 +162,102 @@ model Customer {
 }
 
 model Tender {
-  id                     String       @id @default(uuid())
-  tenderNumber           String       @unique @map("tender_number")
+  id                     String              @id @default(uuid())
+  tenderNumber           String              @unique @map("tender_number")
   title                  String
   description            String?
-  customerId             String?      @map("customer_id")
+  customerId             String?             @map("customer_id")
   department             String?
   category               String?
-  submissionDeadline     DateTime?    @map("submission_deadline")
-  openingDate            DateTime?    @map("opening_date")
-  estimatedValue         Decimal?     @map("estimated_value") @db.Decimal(12, 2)
-  currency               String       @default("KWD")
-  status                 TenderStatus @default(DRAFT)
+  submissionDeadline     DateTime?           @map("submission_deadline")
+  openingDate            DateTime?           @map("opening_date")
+  estimatedValue         Decimal?            @map("estimated_value") @db.Decimal(12, 2)
+  currency               String              @default("KWD")
+  status                 TenderStatus        @default(DRAFT)
   documents              Json?
   products               Json?
-  technicalRequirements  String?      @map("technical_requirements")
-  commercialRequirements String?      @map("commercial_requirements")
-  bondRequired           Boolean      @default(false) @map("bond_required")
-  bondAmount             Decimal?     @map("bond_amount") @db.Decimal(12, 2)
-  createdById            String?      @map("created_by")
-  createdAt              DateTime     @default(now()) @map("created_at")
-  updatedAt              DateTime     @updatedAt @map("updated_at")
+  technicalRequirements  String?             @map("technical_requirements")
+  commercialRequirements String?             @map("commercial_requirements")
+  bondRequired           Boolean             @default(false) @map("bond_required")
+  bondAmount             Decimal?            @map("bond_amount") @db.Decimal(12, 2)
+  createdById            String?             @map("created_by")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
   notes                  String?
-  isDeleted              Boolean      @default(false) @map("is_deleted")
-  createdBy              User?        @relation(fields: [createdById], references: [id])
-  customer               Customer?    @relation(fields: [customerId], references: [id])
+  isDeleted              Boolean             @default(false) @map("is_deleted")
+  createdBy              User?               @relation(fields: [createdById], references: [id])
+  customer               Customer?           @relation(fields: [customerId], references: [id])
   analysis               TenderAnalysis?
+  items                  TenderItem[]
+  participants           TenderParticipant[]
 
   @@index([status])
   @@index([submissionDeadline])
   @@map("tenders")
+}
+
+model TenderItem {
+  id               String                  @id @default(uuid())
+  tenderId         String                  @map("tender_id")
+  itemNumber       Int                     @map("item_number")
+  description      String
+  quantity         Int
+  unit             String
+  specifications   String?
+  isParticipating  Boolean                 @default(true) @map("is_participating")
+  estimatedPrice   Decimal?                @map("estimated_price") @db.Decimal(12, 2)
+  notes            String?
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  isDeleted        Boolean                 @default(false) @map("is_deleted")
+  tender           Tender                  @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  participantBids  ParticipantItemBid[]
+
+  @@unique([tenderId, itemNumber])
+  @@index([tenderId])
+  @@map("tender_items")
+}
+
+model TenderParticipant {
+  id           String               @id @default(uuid())
+  tenderId     String               @map("tender_id")
+  name         String
+  companyName  String?              @map("company_name")
+  contactEmail String?              @map("contact_email")
+  contactPhone String?              @map("contact_phone")
+  isOurBid     Boolean              @default(false) @map("is_our_bid")
+  addedAt      DateTime             @default(now()) @map("added_at")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+  isDeleted    Boolean              @default(false) @map("is_deleted")
+  tender       Tender               @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  itemBids     ParticipantItemBid[]
+
+  @@index([tenderId])
+  @@map("tender_participants")
+}
+
+model ParticipantItemBid {
+  id              String            @id @default(uuid())
+  participantId   String            @map("participant_id")
+  tenderItemId    String            @map("tender_item_id")
+  manufacturer    String?
+  unitPrice       Decimal           @map("unit_price") @db.Decimal(12, 2)
+  totalPrice      Decimal           @map("total_price") @db.Decimal(12, 2)
+  currency        String            @default("KWD")
+  deliveryTime    Int?              @map("delivery_time")
+  deliveryUnit    String?           @map("delivery_unit")
+  notes           String?
+  isWinner        Boolean           @default(false) @map("is_winner")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  participant     TenderParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  tenderItem      TenderItem        @relation(fields: [tenderItemId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, tenderItemId])
+  @@index([participantId])
+  @@index([tenderItemId])
+  @@map("participant_item_bids")
 }
 
 model Budget {

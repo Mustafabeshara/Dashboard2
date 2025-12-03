@@ -5,6 +5,8 @@
 
 'use client';
 
+import { TenderItems } from '@/components/tender/TenderItems';
+import { TenderParticipants } from '@/components/tender/TenderParticipants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -642,11 +644,29 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
             </CardContent>
           </Card>
 
-          {/* Products/Items */}
+          {/* Tender Items Management */}
+          <TenderItems
+            tenderId={tender.id}
+            isReadOnly={
+              tender.status === 'WON' || tender.status === 'LOST' || tender.status === 'CANCELLED'
+            }
+          />
+
+          {/* Participants and Bidding */}
+          <TenderParticipants
+            tenderId={tender.id}
+            tenderStatus={tender.status}
+            submissionDeadline={tender.submissionDeadline}
+          />
+
+          {/* Products/Items (Legacy - for old tenders) */}
           {products.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Items ({products.length})</CardTitle>
+                <CardTitle>Items (Legacy - {products.length})</CardTitle>
+                <CardDescription>
+                  These are old-format items. Use the Tender Items section above for new tenders.
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
