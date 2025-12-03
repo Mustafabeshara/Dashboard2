@@ -4,8 +4,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { TenderStatus } from '@prisma/client'
 
 // GET /api/tenders/[id] - Get tender by ID
 export async function GET(
@@ -15,8 +16,14 @@ export async function GET(
   const { id } = await params
 
   try {
+    // Authentication check
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const tender = await prisma.tender.findUnique({
-      where: { id },
+      where: { id, isDeleted: false },
       include: {
         customer: {
           select: {
@@ -66,6 +73,12 @@ export async function PATCH(
   const { id } = await params
 
   try {
+    // Authentication check
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
 
     const {
@@ -91,7 +104,7 @@ export async function PATCH(
 
     // Check if tender exists
     const existing = await prisma.tender.findUnique({
-      where: { id },
+      where: { id, isDeleted: false },
     })
 
     if (!existing) {
@@ -160,7 +173,7 @@ export async function PATCH(
       },
     })
 
-    console.log(`[Tender] Updated tender: ${tender.id} (${tender.tenderNumber})`)
+    console.log(`[Tender] Updated tender: ${tender.id} (${tender.tenderNumber}) by user ${session.user.email}`)
 
     return NextResponse.json({
       success: true,
@@ -184,9 +197,15 @@ export async function DELETE(
   const { id } = await params
 
   try {
+    // Authentication check
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     // Check if tender exists
     const existing = await prisma.tender.findUnique({
-      where: { id },
+      where: { id, isDeleted: false },
     })
 
     if (!existing) {
@@ -202,7 +221,7 @@ export async function DELETE(
       data: { isDeleted: true },
     })
 
-    console.log(`[Tender] Deleted tender: ${id} (${existing.tenderNumber})`)
+    console.log(`[Tender] Deleted tender: ${id} (${existing.tenderNumber}) by user ${session.user.email}`)
 
     return NextResponse.json({
       success: true,

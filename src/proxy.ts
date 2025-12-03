@@ -59,6 +59,19 @@ function addCorsHeaders(response: NextResponse, request: NextRequest): void {
 // Add security headers
 function addSecurityHeaders(response: NextResponse): void {
   response.headers.set('X-Request-ID', crypto.randomUUID())
+  // Prevent clickjacking
+  response.headers.set('X-Frame-Options', 'DENY')
+  // Prevent MIME type sniffing
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  // Enable XSS filter
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  // Referrer policy
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  // Permissions policy
+  response.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), interest-cohort=()'
+  )
 }
 
 // Handle OPTIONS preflight requests for API routes
