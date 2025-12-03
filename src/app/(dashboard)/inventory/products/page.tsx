@@ -18,7 +18,12 @@ import {
   XCircle,
   Download,
   Upload,
-  Barcode
+  Barcode,
+  Brain,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  Minus
 } from 'lucide-react'
 
 interface Product {
@@ -50,6 +55,22 @@ interface ProductStats {
   categories: number
 }
 
+interface InventoryOptimization {
+  predictedDemand: number
+  demandTrend: string
+  seasonalityFactor: number
+  recommendations: {
+    reorderPoint: number
+    reorderQuantity: number
+    safetyStock: number
+  }
+  stockoutRisk: number
+  costAnalysis: {
+    carryingCost: number
+    potentialSavings: number
+  }
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [stats, setStats] = useState<ProductStats | null>(null)
@@ -58,6 +79,9 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [optimizingProduct, setOptimizingProduct] = useState<string | null>(null)
+  const [selectedOptimization, setSelectedOptimization] = useState<InventoryOptimization | null>(null)
+  const [showOptimizationModal, setShowOptimizationModal] = useState(false)
 
   useEffect(() => {
     fetchProducts()
@@ -82,6 +106,45 @@ export default function ProductsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleOptimize = async (productId: string) => {
+    setOptimizingProduct(productId)
+    try {
+      const response = await fetch(`/api/inventory/products/${productId}/optimize`, {
+        method: 'POST',
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to optimize inventory')
+      }
+
+      const data = await response.json()
+      setSelectedOptimization(data.optimization)
+      setShowOptimizationModal(true)
+    } catch (error) {
+      console.error('Optimization error:', error)
+      alert('Failed to optimize inventory. Please try again.')
+    } finally {
+      setOptimizingProduct(null)
+    }
+  }
+
+  const getTrendIcon = (trend: string) => {
+    switch (trend.toLowerCase()) {
+      case 'increasing':
+        return <TrendingUp className="h-4 w-4 text-green-600" />
+      case 'decreasing':
+        return <TrendingDown className="h-4 w-4 text-red-600" />
+      default:
+        return <Minus className="h-4 w-4 text-gray-600" />
+    }
+  }
+
+  const getRiskColor = (risk: number) => {
+    if (risk >= 70) return 'text-red-600'
+    if (risk >= 40) return 'text-yellow-600'
+    return 'text-green-600'
   }
 
   const formatCurrency = (amount: number, currency = 'KWD') => {
@@ -308,10 +371,22 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
-                          <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
+                          <button
+                            onClick={() => handleOptimize(product.id)}
+                            disabled={optimizingProduct === product.id}
+                            className="p-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg disabled:opacity-50"
+                            title="Optimize Inventory"
+                          >
+                            {optimizingProduct === product.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Brain className="h-4 w-4" />
+                            )}
+                          </button>
+                          <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg" title="Edit Product">
                             <Edit className="h-4 w-4" />
                           </button>
-                          <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded-lg">
+                          <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded-lg" title="Delete Product">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>

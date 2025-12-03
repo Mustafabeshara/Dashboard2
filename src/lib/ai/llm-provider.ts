@@ -6,6 +6,77 @@
 
 import { getForgeApiKey, getGeminiApiKey, getGroqApiKey } from './api-keys';
 
+// Configuration constants
+const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 1000; // 1 second base delay for exponential backoff
+
+/**
+ * Fetch with timeout support
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Retry wrapper with exponential backoff
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = MAX_RETRIES,
+  baseDelayMs: number = RETRY_BASE_DELAY_MS
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      // Don't retry on certain errors
+      const errorMessage = lastError.message.toLowerCase();
+      if (
+        errorMessage.includes('unauthorized') ||
+        errorMessage.includes('api key') ||
+        errorMessage.includes('invalid') ||
+        errorMessage.includes('not configured')
+      ) {
+        throw lastError;
+      }
+
+      // If this isn't the last attempt, wait before retrying
+      if (attempt < maxRetries - 1) {
+        const delayMs = baseDelayMs * Math.pow(2, attempt); // Exponential backoff: 1s, 2s, 4s
+        console.log(`[LLM] Attempt ${attempt + 1} failed, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  throw lastError || new Error('All retry attempts failed');
+}
+
 export type Role = 'system' | 'user' | 'assistant' | 'tool' | 'function';
 
 export type TextContent = {
@@ -406,13 +477,14 @@ async function invokeGoogleGemini(params: InvokeParams, apiKey: string): Promise
     };
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }
+    },
+    DEFAULT_TIMEOUT_MS
   );
 
   if (!response.ok) {
@@ -502,14 +574,18 @@ export async function invokeGemini(params: InvokeParams): Promise<InvokeResult> 
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`,
+  const response = await fetchWithTimeout(
+    apiUrl,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    DEFAULT_TIMEOUT_MS
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -554,14 +630,18 @@ export async function invokeGroq(params: InvokeParams & { model?: string }): Pro
     payload.tool_choice = normalizedToolChoice;
   }
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`,
+  const response = await fetchWithTimeout(
+    'https://api.groq.com/openai/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
+    DEFAULT_TIMEOUT_MS
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -607,7 +687,7 @@ export async function getRecommendedProvider(
 }
 
 /**
- * Unified LLM invocation with automatic fallback
+ * Unified LLM invocation with automatic fallback and retry logic
  */
 export async function invokeUnifiedLLM(
   params: InvokeParams,
@@ -616,28 +696,34 @@ export async function invokeUnifiedLLM(
   const effectiveConfig = config || { provider: LLMProvider.GEMINI };
   const provider = effectiveConfig.provider;
 
-  try {
-    if (provider === LLMProvider.GROQ) {
-      if (!(await isGroqConfigured())) {
-        console.warn('Groq not configured, falling back to Gemini');
+  // Wrap the invocation with retry logic
+  const invokeWithRetry = async (): Promise<InvokeResult> => {
+    try {
+      if (provider === LLMProvider.GROQ) {
+        if (!(await isGroqConfigured())) {
+          console.warn('Groq not configured, falling back to Gemini');
+          return await invokeGemini(params);
+        }
+
+        const model = effectiveConfig.model || 'llama-3.1-70b-versatile';
+        return await invokeGroq({ ...params, model });
+      }
+
+      // Default to Gemini
+      return await invokeGemini(params);
+    } catch (error) {
+      console.error(`LLM invocation failed with ${provider}:`, error);
+
+      // If Groq fails, try Gemini as fallback (no retry needed for fallback)
+      if (provider === LLMProvider.GROQ) {
+        console.log('Falling back to Gemini after Groq failure');
         return await invokeGemini(params);
       }
 
-      const model = effectiveConfig.model || 'llama-3.1-70b-versatile';
-      return await invokeGroq({ ...params, model });
+      throw error;
     }
+  };
 
-    // Default to Gemini
-    return await invokeGemini(params);
-  } catch (error) {
-    console.error(`LLM invocation failed with ${provider}:`, error);
-
-    // If Groq fails, try Gemini as fallback
-    if (provider === LLMProvider.GROQ) {
-      console.log('Falling back to Gemini after Groq failure');
-      return await invokeGemini(params);
-    }
-
-    throw error;
-  }
+  // Apply retry logic with exponential backoff
+  return withRetry(invokeWithRetry, MAX_RETRIES, RETRY_BASE_DELAY_MS);
 }
