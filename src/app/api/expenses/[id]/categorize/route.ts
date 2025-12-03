@@ -23,7 +23,7 @@ interface AnomalyReason {
   severity: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const startTime = Date.now();
 
   try {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const expenseId = params.id;
+    const { id: expenseId } = await params;
 
     // Check if already categorized
     const existing = await prisma.expenseCategorization.findUnique({
@@ -307,15 +307,17 @@ Respond with valid JSON only. No additional text.`;
 }
 
 // GET endpoint to retrieve existing categorization
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
+
     const categorization = await prisma.expenseCategorization.findUnique({
-      where: { expenseId: params.id },
+      where: { expenseId: id },
       include: {
         expense: {
           include: {
@@ -362,18 +364,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PATCH endpoint to confirm categorization
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { isConfirmed, selectedCategory } = body;
 
     const categorization = await prisma.expenseCategorization.update({
-      where: { expenseId: params.id },
+      where: { expenseId: id },
       data: {
         isConfirmed: isConfirmed || false,
         reviewedAt: new Date(),
@@ -394,7 +397,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
       if (newCategory) {
         await prisma.expense.update({
-          where: { id: params.id },
+          where: { id },
           data: { budgetCategoryId: newCategory.id },
         });
       }

@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const startTime = Date.now();
 
   try {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const productId = params.id;
+    const { id: productId } = await params;
 
     // Fetch product data
     const product = await prisma.product.findUnique({
@@ -305,15 +305,17 @@ Respond with valid JSON only. No additional text.`;
 }
 
 // GET endpoint to retrieve existing optimization
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
+
     const optimization = await prisma.inventoryOptimization.findFirst({
-      where: { productId: params.id },
+      where: { productId: id },
       orderBy: { analyzedAt: 'desc' },
       include: {
         product: {
