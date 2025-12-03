@@ -1,0 +1,25 @@
+{
+  "project": "Dashboard2",
+  "model": "claude-sonnet-4",
+  "maxTokens": 8096,
+  "temperature": 0.7,
+  "features": {
+    "codeGeneration": true,
+    "testing": true,
+    "refactoring": true,
+    "documentation": true,
+    "debugging": true
+  },
+  "context": {
+    "framework": "Next.js 14",
+    "language": "TypeScript",
+    "database": "PostgreSQL with Prisma",
+    "aiProviders": ["Gemini", "Groq", "Anthropic"],
+    "specialFocus": [
+      "Budget Management System",
+      "Tender Analysis",
+      "AI-powered Forecasting",
+      "Medical Device Distribution"
+    ]
+  }
+}
