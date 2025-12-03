@@ -1,101 +1,101 @@
-'use client'
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Switch } from '@/components/ui/switch'
-import { 
-  Save, 
-  Building, 
-  Key, 
-  Bell, 
-  Palette, 
-  Activity, 
-  ExternalLink, 
-  Eye, 
-  EyeOff,
+'use client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Activity,
+  Bell,
+  Building,
   CheckCircle,
-  XCircle,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Key,
   Loader2,
-  Trash2,
-  Sun,
+  Monitor,
   Moon,
-  Monitor
-} from 'lucide-react'
+  Palette,
+  Save,
+  Sun,
+  Trash2,
+  XCircle,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 interface ApiKeySetting {
-  key: string
-  label: string
-  description: string
-  isSet: boolean
-  source: 'database' | 'environment' | 'not_set'
-  maskedValue: string
-  isSecret: boolean
+  key: string;
+  label: string;
+  description: string;
+  isSet: boolean;
+  source: 'database' | 'environment' | 'not_set';
+  maskedValue: string;
+  isSecret: boolean;
 }
 
 interface NotificationPreferences {
-  email: boolean
-  system: boolean
-  budgetAlerts: boolean
-  tenderUpdates: boolean
-  inventoryAlerts: boolean
-  approvalRequests: boolean
-  weeklyDigest: boolean
+  email: boolean;
+  system: boolean;
+  budgetAlerts: boolean;
+  tenderUpdates: boolean;
+  inventoryAlerts: boolean;
+  approvalRequests: boolean;
+  weeklyDigest: boolean;
 }
 
 interface AppearancePreferences {
-  theme: 'light' | 'dark' | 'system'
-  sidebarCollapsed: boolean
-  compactMode: boolean
-  colorScheme: 'default' | 'blue' | 'green' | 'purple'
+  theme: 'light' | 'dark' | 'system';
+  sidebarCollapsed: boolean;
+  compactMode: boolean;
+  colorScheme: 'default' | 'blue' | 'green' | 'purple';
 }
 
 interface CompanyProfile {
-  name: string
-  taxId: string
-  email: string
-  phone: string
-  address: string
-  website: string
-  registrationNumber: string
-  currency: string
+  name: string;
+  taxId: string;
+  email: string;
+  phone: string;
+  address: string;
+  website: string;
+  registrationNumber: string;
+  currency: string;
 }
 
-function ApiKeyInput({ 
-  setting, 
-  onSave, 
+function ApiKeyInput({
+  setting,
+  onSave,
   onDelete,
-  saving 
-}: { 
-  setting: ApiKeySetting
-  onSave: (key: string, value: string) => Promise<boolean>
-  onDelete: (key: string) => Promise<void>
-  saving: string | null
+  saving,
+}: {
+  setting: ApiKeySetting;
+  onSave: (key: string, value: string) => Promise<boolean>;
+  onDelete: (key: string) => Promise<void>;
+  saving: string | null;
 }) {
-  const [value, setValue] = useState('')
-  const [showValue, setShowValue] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [localError, setLocalError] = useState<string | null>(null)
+  const [value, setValue] = useState('');
+  const [showValue, setShowValue] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSave = async () => {
-    setLocalError(null)
-    const success = await onSave(setting.key, value)
+    setLocalError(null);
+    const success = await onSave(setting.key, value);
     if (success) {
-      setValue('')
-      setIsEditing(false)
+      setValue('');
+      setIsEditing(false);
     }
-  }
+  };
 
   const handleDelete = async () => {
     if (confirm(`Remove ${setting.label}?`)) {
-      await onDelete(setting.key)
+      await onDelete(setting.key);
     }
-  }
+  };
 
-  const isSaving = saving === setting.key
+  const isSaving = saving === setting.key;
 
   return (
     <div className="border rounded-lg p-4 space-y-3">
@@ -104,20 +104,20 @@ function ApiKeyInput({
           <div className="flex items-center gap-2">
             <Label className="font-medium">{setting.label}</Label>
             {setting.isSet && (
-              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                setting.source === 'environment' 
-                  ? 'bg-blue-100 text-blue-700' 
-                  : 'bg-green-100 text-green-700'
-              }`}>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full ${
+                  setting.source === 'environment'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-green-100 text-green-700'
+                }`}
+              >
                 {setting.source === 'environment' ? 'From ENV' : 'Saved'}
               </span>
             )}
           </div>
           <p className="text-sm text-muted-foreground">{setting.description}</p>
         </div>
-        {setting.isSet && (
-          <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-        )}
+        {setting.isSet && <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />}
       </div>
 
       {isEditing ? (
@@ -126,7 +126,7 @@ function ApiKeyInput({
             <Input
               type={showValue ? 'text' : 'password'}
               value={value}
-              onChange={(e) => setValue(e.target.value)}
+              onChange={e => setValue(e.target.value)}
               placeholder={setting.isSet ? 'Enter new value to replace' : 'Enter API key'}
               className="pr-10"
             />
@@ -142,10 +142,21 @@ function ApiKeyInput({
           </div>
           <div className="flex gap-2">
             <Button size="sm" onClick={handleSave} disabled={!value || isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
+              ) : (
+                <Save className="w-4 h-4 mr-1" />
+              )}
               Save
             </Button>
-            <Button size="sm" variant="outline" onClick={() => { setIsEditing(false); setValue(''); }}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setIsEditing(false);
+                setValue('');
+              }}
+            >
               Cancel
             </Button>
           </div>
@@ -157,13 +168,22 @@ function ApiKeyInput({
               <code className="flex-1 px-3 py-2 bg-gray-100 rounded text-sm font-mono">
                 {setting.maskedValue}
               </code>
-              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
-                Change
-              </Button>
-              {setting.source === 'database' && (
-                <Button size="sm" variant="ghost" onClick={handleDelete} className="text-red-600 hover:text-red-700 hover:bg-red-50">
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+              {setting.source === 'environment' ? (
+                <span className="text-xs text-blue-600 font-medium">Edit in Railway/Vercel</span>
+              ) : (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                    Change
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleDelete}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </>
               )}
             </>
           ) : (
@@ -178,16 +198,16 @@ function ApiKeyInput({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 export default function SettingsPage() {
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState<string | null>(null)
-  const [apiKeys, setApiKeys] = useState<ApiKeySetting[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [apiKeys, setApiKeys] = useState<ApiKeySetting[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
   // Company Profile state
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>({
     name: '',
@@ -198,8 +218,8 @@ export default function SettingsPage() {
     website: '',
     registrationNumber: '',
     currency: 'KWD',
-  })
-  const [savingCompany, setSavingCompany] = useState(false)
+  });
+  const [savingCompany, setSavingCompany] = useState(false);
 
   // Notification Preferences state
   const [notifications, setNotifications] = useState<NotificationPreferences>({
@@ -210,8 +230,8 @@ export default function SettingsPage() {
     inventoryAlerts: true,
     approvalRequests: true,
     weeklyDigest: false,
-  })
-  const [savingNotifications, setSavingNotifications] = useState(false)
+  });
+  const [savingNotifications, setSavingNotifications] = useState(false);
 
   // Appearance state
   const [appearance, setAppearance] = useState<AppearancePreferences>({
@@ -219,222 +239,218 @@ export default function SettingsPage() {
     sidebarCollapsed: false,
     compactMode: false,
     colorScheme: 'default',
-  })
-  const [savingAppearance, setSavingAppearance] = useState(false)
+  });
+  const [savingAppearance, setSavingAppearance] = useState(false);
 
   const fetchApiKeys = async () => {
     try {
-      const response = await fetch('/api/admin/api-keys')
+      const response = await fetch('/api/admin/api-keys');
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
+        const data = await response.json().catch(() => ({}));
         if (response.status === 403) {
-          setError(data.error || 'API Key management requires a management role')
-          return
+          setError(data.error || 'API Key management requires a management role');
+          return;
         }
         if (response.status === 401) {
-          setError('Please log in to manage API keys')
-          return
+          setError('Please log in to manage API keys');
+          return;
         }
-        throw new Error(data.error || 'Failed to load API keys')
+        throw new Error(data.error || 'Failed to load API keys');
       }
-      const data = await response.json()
-      setApiKeys(data.settings)
-      setError(null) // Clear any previous errors
+      const data = await response.json();
+      setApiKeys(data.settings);
+      setError(null); // Clear any previous errors
     } catch (err) {
-      console.error('API keys fetch error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load API keys')
+      console.error('API keys fetch error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load API keys');
     }
-  }
+  };
 
   const fetchCompanyProfile = async () => {
     try {
-      const response = await fetch('/api/company/profile')
+      const response = await fetch('/api/company/profile');
       if (response.ok) {
-        const data = await response.json()
-        setCompanyProfile(data)
+        const data = await response.json();
+        setCompanyProfile(data);
       }
     } catch (err) {
-      console.error('Company profile fetch error:', err)
+      console.error('Company profile fetch error:', err);
     }
-  }
+  };
 
   const fetchUserPreferences = async () => {
     try {
-      const response = await fetch('/api/user/preferences')
+      const response = await fetch('/api/user/preferences');
       if (response.ok) {
-        const data = await response.json()
-        if (data.notifications) setNotifications(data.notifications)
-        if (data.appearance) setAppearance(data.appearance)
+        const data = await response.json();
+        if (data.notifications) setNotifications(data.notifications);
+        if (data.appearance) setAppearance(data.appearance);
       }
     } catch (err) {
-      console.error('User preferences fetch error:', err)
+      console.error('User preferences fetch error:', err);
     }
-  }
+  };
 
   useEffect(() => {
     const loadAll = async () => {
-      setLoading(true)
-      await Promise.all([
-        fetchApiKeys(),
-        fetchCompanyProfile(),
-        fetchUserPreferences(),
-      ])
-      setLoading(false)
-    }
-    loadAll()
-  }, [])
+      setLoading(true);
+      await Promise.all([fetchApiKeys(), fetchCompanyProfile(), fetchUserPreferences()]);
+      setLoading(false);
+    };
+    loadAll();
+  }, []);
 
   const handleSave = async (key: string, value: string): Promise<boolean> => {
-    setSaving(key)
-    setError(null)
-    setSuccess(null)
-    
+    setSaving(key);
+    setError(null);
+    setSuccess(null);
+
     try {
       const response = await fetch('/api/admin/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value })
-      })
-      
-      const data = await response.json()
-      
+        body: JSON.stringify({ key, value }),
+      });
+
+      const data = await response.json();
+
       if (!response.ok) {
-        setError(data.error || `Failed to save API key (${response.status})`)
-        return false
+        setError(data.error || `Failed to save API key (${response.status})`);
+        return false;
       }
-      
-      setSuccess('API key saved successfully')
-      await fetchApiKeys()
-      return true
+
+      setSuccess('API key saved successfully');
+      await fetchApiKeys();
+      return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
-      return false
+      setError(err instanceof Error ? err.message : 'Failed to save');
+      return false;
     } finally {
-      setSaving(null)
+      setSaving(null);
     }
-  }
+  };
 
   const handleDelete = async (key: string) => {
-    setSaving(key)
-    setError(null)
-    
+    setSaving(key);
+    setError(null);
+
     try {
       const response = await fetch(`/api/admin/api-keys?key=${key}`, {
-        method: 'DELETE'
-      })
-      
+        method: 'DELETE',
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to remove API key')
+        throw new Error('Failed to remove API key');
       }
-      
-      setSuccess('API key removed')
-      await fetchApiKeys()
+
+      setSuccess('API key removed');
+      await fetchApiKeys();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove')
+      setError(err instanceof Error ? err.message : 'Failed to remove');
     } finally {
-      setSaving(null)
+      setSaving(null);
     }
-  }
+  };
 
   const handleSaveCompanyProfile = async () => {
-    setSavingCompany(true)
-    setError(null)
-    
+    setSavingCompany(true);
+    setError(null);
+
     try {
       const response = await fetch('/api/company/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(companyProfile)
-      })
-      
+        body: JSON.stringify(companyProfile),
+      });
+
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to save company profile')
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save company profile');
       }
-      
-      setSuccess('Company profile saved successfully')
+
+      setSuccess('Company profile saved successfully');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
+      setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
-      setSavingCompany(false)
+      setSavingCompany(false);
     }
-  }
+  };
 
   const handleSaveNotifications = async () => {
-    setSavingNotifications(true)
-    setError(null)
-    
+    setSavingNotifications(true);
+    setError(null);
+
     try {
       const response = await fetch('/api/user/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notifications })
-      })
-      
+        body: JSON.stringify({ notifications }),
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to save notification preferences')
+        throw new Error('Failed to save notification preferences');
       }
-      
-      setSuccess('Notification preferences saved')
+
+      setSuccess('Notification preferences saved');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
+      setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
-      setSavingNotifications(false)
+      setSavingNotifications(false);
     }
-  }
+  };
 
   const handleSaveAppearance = async () => {
-    setSavingAppearance(true)
-    setError(null)
-    
+    setSavingAppearance(true);
+    setError(null);
+
     try {
       const response = await fetch('/api/user/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appearance })
-      })
-      
+        body: JSON.stringify({ appearance }),
+      });
+
       if (!response.ok) {
-        throw new Error('Failed to save appearance preferences')
+        throw new Error('Failed to save appearance preferences');
       }
-      
+
       // Apply theme immediately
-      applyTheme(appearance.theme)
-      
-      setSuccess('Appearance preferences saved')
+      applyTheme(appearance.theme);
+
+      setSuccess('Appearance preferences saved');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save')
+      setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
-      setSavingAppearance(false)
+      setSavingAppearance(false);
     }
-  }
+  };
 
   const applyTheme = (theme: 'light' | 'dark' | 'system') => {
-    const root = document.documentElement
+    const root = document.documentElement;
     if (theme === 'dark') {
-      root.classList.add('dark')
+      root.classList.add('dark');
     } else if (theme === 'light') {
-      root.classList.remove('dark')
+      root.classList.remove('dark');
     } else {
       // System preference
       if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        root.classList.add('dark')
+        root.classList.add('dark');
       } else {
-        root.classList.remove('dark')
+        root.classList.remove('dark');
       }
     }
-  }
+  };
 
   // Clear messages after 3 seconds
   useEffect(() => {
     if (success || error) {
       const timer = setTimeout(() => {
-        setSuccess(null)
-        setError(null)
-      }, 3000)
-      return () => clearTimeout(timer)
+        setSuccess(null);
+        setError(null);
+      }, 3000);
+      return () => clearTimeout(timer);
     }
-  }, [success, error])
+  }, [success, error]);
 
   return (
     <div className="container mx-auto py-6 max-w-5xl space-y-6">
@@ -459,10 +475,22 @@ export default function SettingsPage() {
 
       <Tabs defaultValue="company" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="company"><Building className="mr-2 h-4 w-4" />Company</TabsTrigger>
-          <TabsTrigger value="integrations"><Key className="mr-2 h-4 w-4" />Integrations</TabsTrigger>
-          <TabsTrigger value="notifications"><Bell className="mr-2 h-4 w-4" />Notifications</TabsTrigger>
-          <TabsTrigger value="appearance"><Palette className="mr-2 h-4 w-4" />Appearance</TabsTrigger>
+          <TabsTrigger value="company">
+            <Building className="mr-2 h-4 w-4" />
+            Company
+          </TabsTrigger>
+          <TabsTrigger value="integrations">
+            <Key className="mr-2 h-4 w-4" />
+            Integrations
+          </TabsTrigger>
+          <TabsTrigger value="notifications">
+            <Bell className="mr-2 h-4 w-4" />
+            Notifications
+          </TabsTrigger>
+          <TabsTrigger value="appearance">
+            <Palette className="mr-2 h-4 w-4" />
+            Appearance
+          </TabsTrigger>
         </TabsList>
 
         {/* Company Profile Tab */}
@@ -470,72 +498,78 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Company Profile</CardTitle>
-              <CardDescription>Update your company information used in reports and documents</CardDescription>
+              <CardDescription>
+                Update your company information used in reports and documents
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="companyName">Company Name</Label>
-                  <Input 
-                    id="companyName" 
+                  <Input
+                    id="companyName"
                     value={companyProfile.name}
-                    onChange={(e) => setCompanyProfile({ ...companyProfile, name: e.target.value })}
+                    onChange={e => setCompanyProfile({ ...companyProfile, name: e.target.value })}
                     placeholder="Your Company Name"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="taxId">Tax ID / VAT Number</Label>
-                  <Input 
-                    id="taxId" 
+                  <Input
+                    id="taxId"
                     value={companyProfile.taxId}
-                    onChange={(e) => setCompanyProfile({ ...companyProfile, taxId: e.target.value })}
+                    onChange={e => setCompanyProfile({ ...companyProfile, taxId: e.target.value })}
                     placeholder="Tax identification number"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Company Email</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
+                  <Input
+                    id="email"
+                    type="email"
                     value={companyProfile.email}
-                    onChange={(e) => setCompanyProfile({ ...companyProfile, email: e.target.value })}
+                    onChange={e => setCompanyProfile({ ...companyProfile, email: e.target.value })}
                     placeholder="company@example.com"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone</Label>
-                  <Input 
-                    id="phone" 
+                  <Input
+                    id="phone"
                     value={companyProfile.phone}
-                    onChange={(e) => setCompanyProfile({ ...companyProfile, phone: e.target.value })}
+                    onChange={e => setCompanyProfile({ ...companyProfile, phone: e.target.value })}
                     placeholder="+965 XXXX XXXX"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="website">Website</Label>
-                  <Input 
-                    id="website" 
+                  <Input
+                    id="website"
                     value={companyProfile.website}
-                    onChange={(e) => setCompanyProfile({ ...companyProfile, website: e.target.value })}
+                    onChange={e =>
+                      setCompanyProfile({ ...companyProfile, website: e.target.value })
+                    }
                     placeholder="https://example.com"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="registrationNumber">Registration Number</Label>
-                  <Input 
-                    id="registrationNumber" 
+                  <Input
+                    id="registrationNumber"
                     value={companyProfile.registrationNumber}
-                    onChange={(e) => setCompanyProfile({ ...companyProfile, registrationNumber: e.target.value })}
+                    onChange={e =>
+                      setCompanyProfile({ ...companyProfile, registrationNumber: e.target.value })
+                    }
                     placeholder="Company registration number"
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="address">Address</Label>
-                <Input 
-                  id="address" 
+                <Input
+                  id="address"
                   value={companyProfile.address}
-                  onChange={(e) => setCompanyProfile({ ...companyProfile, address: e.target.value })}
+                  onChange={e => setCompanyProfile({ ...companyProfile, address: e.target.value })}
                   placeholder="Company address"
                 />
               </div>
@@ -561,7 +595,9 @@ export default function SettingsPage() {
                   <Activity className="w-5 h-5 text-blue-600" />
                   <div>
                     <p className="font-medium text-blue-900">API Diagnostics</p>
-                    <p className="text-sm text-blue-700">Test connectivity to AI providers and services</p>
+                    <p className="text-sm text-blue-700">
+                      Test connectivity to AI providers and services
+                    </p>
                   </div>
                 </div>
                 <Link href="/settings/diagnostics">
@@ -576,17 +612,41 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>AI Provider API Keys</CardTitle>
                 <CardDescription>
-                  Configure API keys for AI-powered document extraction. Keys are encrypted and stored securely.
+                  Configure API keys for AI-powered document extraction.
+                  <strong className="text-blue-600">
+                    {' '}
+                    Tip: Use environment variables (Railway/Vercel) for production.
+                  </strong>
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {apiKeys.some(k => k.source === 'environment') && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
+                    <div className="flex items-center gap-2 text-green-800">
+                      <CheckCircle className="w-4 h-4" />
+                      <span className="font-medium">Using Environment Variables</span>
+                    </div>
+                    <p className="text-green-700 mt-1 text-xs">
+                      {apiKeys.filter(k => k.source === 'environment').length} API key(s) loaded
+                      from Railway/Vercel environment. These cannot be edited here - update them in
+                      your hosting platform's dashboard.
+                    </p>
+                  </div>
+                )}
                 {apiKeys.length > 0 ? (
                   <div className="space-y-4">
                     {/* Group AI providers */}
                     <div className="space-y-3">
                       <h4 className="text-sm font-medium text-gray-700">AI Providers</h4>
                       {apiKeys
-                        .filter(k => ['GROQ_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'].includes(k.key))
+                        .filter(k =>
+                          [
+                            'GROQ_API_KEY',
+                            'GEMINI_API_KEY',
+                            'OPENAI_API_KEY',
+                            'ANTHROPIC_API_KEY',
+                          ].includes(k.key)
+                        )
                         .map(setting => (
                           <ApiKeyInput
                             key={setting.key}
@@ -595,8 +655,7 @@ export default function SettingsPage() {
                             onDelete={handleDelete}
                             saving={saving}
                           />
-                        ))
-                      }
+                        ))}
                     </div>
 
                     {/* AWS credentials */}
@@ -612,8 +671,7 @@ export default function SettingsPage() {
                             onDelete={handleDelete}
                             saving={saving}
                           />
-                        ))
-                      }
+                        ))}
                     </div>
                   </div>
                 ) : (
@@ -626,20 +684,32 @@ export default function SettingsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Environment Variables</CardTitle>
+                <CardTitle>Environment Variables (Recommended for Production)</CardTitle>
                 <CardDescription>
-                  API keys can also be set via environment variables on your hosting platform (Railway, Vercel, etc.)
+                  For Railway/Vercel deployment, set API keys as environment variables for better
+                  security
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="bg-gray-50 rounded-lg p-4 text-sm">
-                  <p className="text-gray-600 mb-2">Priority order for API keys:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-gray-700">
-                    <li><strong>Database</strong> - Keys saved through this settings page</li>
-                    <li><strong>Environment</strong> - Variables set on your hosting platform</li>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                  <p className="text-blue-900 font-medium mb-2">✨ Recommended Approach:</p>
+                  <p className="text-blue-800 mb-3">
+                    Set API keys as environment variables on Railway/Vercel instead of storing them
+                    in the database.
+                  </p>
+                  <p className="text-blue-700 mb-2">Priority order (highest to lowest):</p>
+                  <ol className="list-decimal list-inside space-y-1 text-blue-800 ml-2">
+                    <li>
+                      <strong>Environment Variables</strong> - Set on Railway/Vercel dashboard (most
+                      secure)
+                    </li>
+                    <li>
+                      <strong>Database</strong> - Keys saved through this settings page (fallback
+                      for local/desktop)
+                    </li>
                   </ol>
-                  <p className="text-gray-500 mt-3 text-xs">
-                    Keys saved here override environment variables for the same setting.
+                  <p className="text-blue-600 mt-3 text-xs">
+                    💡 Environment variables are more secure and don't require database encryption.
                   </p>
                 </div>
               </CardContent>
@@ -662,19 +732,25 @@ export default function SettingsPage() {
                     <Label className="font-medium">Email Notifications</Label>
                     <p className="text-sm text-muted-foreground">Receive notifications via email</p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.email}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, email: checked })}
+                    onCheckedChange={checked =>
+                      setNotifications({ ...notifications, email: checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
                   <div>
                     <Label className="font-medium">In-App Notifications</Label>
-                    <p className="text-sm text-muted-foreground">Show notifications within the application</p>
+                    <p className="text-sm text-muted-foreground">
+                      Show notifications within the application
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.system}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, system: checked })}
+                    onCheckedChange={checked =>
+                      setNotifications({ ...notifications, system: checked })
+                    }
                   />
                 </div>
               </div>
@@ -684,51 +760,71 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between py-2 border-b">
                   <div>
                     <Label className="font-medium">Budget Alerts</Label>
-                    <p className="text-sm text-muted-foreground">Notifications when budget thresholds are reached</p>
+                    <p className="text-sm text-muted-foreground">
+                      Notifications when budget thresholds are reached
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.budgetAlerts}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, budgetAlerts: checked })}
+                    onCheckedChange={checked =>
+                      setNotifications({ ...notifications, budgetAlerts: checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
                   <div>
                     <Label className="font-medium">Tender Updates</Label>
-                    <p className="text-sm text-muted-foreground">Notifications for tender status changes</p>
+                    <p className="text-sm text-muted-foreground">
+                      Notifications for tender status changes
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.tenderUpdates}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, tenderUpdates: checked })}
+                    onCheckedChange={checked =>
+                      setNotifications({ ...notifications, tenderUpdates: checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
                   <div>
                     <Label className="font-medium">Inventory Alerts</Label>
-                    <p className="text-sm text-muted-foreground">Low stock and reorder notifications</p>
+                    <p className="text-sm text-muted-foreground">
+                      Low stock and reorder notifications
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.inventoryAlerts}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, inventoryAlerts: checked })}
+                    onCheckedChange={checked =>
+                      setNotifications({ ...notifications, inventoryAlerts: checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between py-2 border-b">
                   <div>
                     <Label className="font-medium">Approval Requests</Label>
-                    <p className="text-sm text-muted-foreground">Notifications when approvals are needed</p>
+                    <p className="text-sm text-muted-foreground">
+                      Notifications when approvals are needed
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.approvalRequests}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, approvalRequests: checked })}
+                    onCheckedChange={checked =>
+                      setNotifications({ ...notifications, approvalRequests: checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <div>
                     <Label className="font-medium">Weekly Digest</Label>
-                    <p className="text-sm text-muted-foreground">Weekly summary of activities and reports</p>
+                    <p className="text-sm text-muted-foreground">
+                      Weekly summary of activities and reports
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.weeklyDigest}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, weeklyDigest: checked })}
+                    onCheckedChange={checked =>
+                      setNotifications({ ...notifications, weeklyDigest: checked })
+                    }
                   />
                 </div>
               </div>
@@ -758,8 +854,8 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-3 gap-4">
                   <button
                     className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
-                      appearance.theme === 'light' 
-                        ? 'border-blue-500 bg-blue-50' 
+                      appearance.theme === 'light'
+                        ? 'border-blue-500 bg-blue-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     onClick={() => setAppearance({ ...appearance, theme: 'light' })}
@@ -769,8 +865,8 @@ export default function SettingsPage() {
                   </button>
                   <button
                     className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
-                      appearance.theme === 'dark' 
-                        ? 'border-blue-500 bg-blue-50' 
+                      appearance.theme === 'dark'
+                        ? 'border-blue-500 bg-blue-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     onClick={() => setAppearance({ ...appearance, theme: 'dark' })}
@@ -780,8 +876,8 @@ export default function SettingsPage() {
                   </button>
                   <button
                     className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
-                      appearance.theme === 'system' 
-                        ? 'border-blue-500 bg-blue-50' 
+                      appearance.theme === 'system'
+                        ? 'border-blue-500 bg-blue-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                     onClick={() => setAppearance({ ...appearance, theme: 'system' })}
@@ -800,15 +896,20 @@ export default function SettingsPage() {
                     { id: 'blue', color: 'bg-sky-500', label: 'Blue' },
                     { id: 'green', color: 'bg-emerald-500', label: 'Green' },
                     { id: 'purple', color: 'bg-violet-500', label: 'Purple' },
-                  ].map((scheme) => (
+                  ].map(scheme => (
                     <button
                       key={scheme.id}
                       className={`flex items-center gap-2 px-4 py-2 border-2 rounded-lg transition-colors ${
-                        appearance.colorScheme === scheme.id 
-                          ? 'border-gray-900' 
+                        appearance.colorScheme === scheme.id
+                          ? 'border-gray-900'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
-                      onClick={() => setAppearance({ ...appearance, colorScheme: scheme.id as AppearancePreferences['colorScheme'] })}
+                      onClick={() =>
+                        setAppearance({
+                          ...appearance,
+                          colorScheme: scheme.id as AppearancePreferences['colorScheme'],
+                        })
+                      }
                     >
                       <div className={`w-4 h-4 rounded-full ${scheme.color}`} />
                       <span className="text-sm">{scheme.label}</span>
@@ -822,21 +923,29 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between py-2 border-b">
                   <div>
                     <Label className="font-medium">Collapsed Sidebar</Label>
-                    <p className="text-sm text-muted-foreground">Start with sidebar collapsed by default</p>
+                    <p className="text-sm text-muted-foreground">
+                      Start with sidebar collapsed by default
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={appearance.sidebarCollapsed}
-                    onCheckedChange={(checked) => setAppearance({ ...appearance, sidebarCollapsed: checked })}
+                    onCheckedChange={checked =>
+                      setAppearance({ ...appearance, sidebarCollapsed: checked })
+                    }
                   />
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <div>
                     <Label className="font-medium">Compact Mode</Label>
-                    <p className="text-sm text-muted-foreground">Reduce spacing for more content on screen</p>
+                    <p className="text-sm text-muted-foreground">
+                      Reduce spacing for more content on screen
+                    </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={appearance.compactMode}
-                    onCheckedChange={(checked) => setAppearance({ ...appearance, compactMode: checked })}
+                    onCheckedChange={checked =>
+                      setAppearance({ ...appearance, compactMode: checked })
+                    }
                   />
                 </div>
               </div>
@@ -854,5 +963,5 @@ export default function SettingsPage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

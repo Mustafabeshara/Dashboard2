@@ -1,72 +1,68 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
 import {
   Brain,
-  Sparkles,
-  Upload,
-  FileText,
   CheckCircle,
-  XCircle,
   Clock,
-  AlertTriangle,
-  Settings,
-  RefreshCw,
-  Play,
-  Pause,
-  Trash2,
   Eye,
-  Download,
-  Zap,
+  FileText,
+  Play,
+  RefreshCw,
+  Settings,
+  Sparkles,
   Target,
-  TrendingUp
-} from 'lucide-react'
+  TrendingUp,
+  Upload,
+  XCircle,
+  Zap,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 interface ProcessingJob {
-  id: string
-  documentId: string
-  documentName: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
-  extractionType: string
-  confidence?: number
-  startedAt?: string
-  completedAt?: string
-  error?: string
-  extractedData?: Record<string, any>
+  id: string;
+  documentId: string;
+  documentName: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  extractionType: string;
+  confidence?: number;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+  extractedData?: Record<string, any>;
 }
 
 interface AIStats {
-  totalProcessed: number
-  successRate: number
-  avgConfidence: number
-  pendingJobs: number
-  activeJobs: number
+  totalProcessed: number;
+  successRate: number;
+  avgConfidence: number;
+  pendingJobs: number;
+  activeJobs: number;
 }
 
 export default function AIProcessingPage() {
-  const [jobs, setJobs] = useState<ProcessingJob[]>([])
-  const [stats, setStats] = useState<AIStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [selectedJob, setSelectedJob] = useState<ProcessingJob | null>(null)
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  const [processing, setProcessing] = useState(false)
+  const [jobs, setJobs] = useState<ProcessingJob[]>([]);
+  const [stats, setStats] = useState<AIStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState<ProcessingJob | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    fetchJobs()
+    fetchJobs();
     // Poll for updates every 5 seconds
-    const interval = setInterval(fetchJobs, 5000)
-    return () => clearInterval(interval)
-  }, [])
+    const interval = setInterval(fetchJobs, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchJobs = async () => {
     try {
       // Fetch documents with extractions
-      const response = await fetch('/api/documents?limit=50')
+      const response = await fetch('/api/documents?limit=50');
       if (response.ok) {
-        const data = await response.json()
-        const documents = data.documents || data.data || []
-        
+        const data = await response.json();
+        const documents = data.documents || data.data || [];
+
         // Transform to processing jobs
         const processingJobs: ProcessingJob[] = documents.map((doc: any) => ({
           id: doc.id,
@@ -77,66 +73,82 @@ export default function AIProcessingPage() {
           confidence: doc.extractions?.[0]?.confidence,
           startedAt: doc.createdAt,
           completedAt: doc.status === 'PROCESSED' ? doc.updatedAt : undefined,
-          extractedData: doc.extractions?.[0]?.extractedData
-        }))
-        
-        setJobs(processingJobs)
-        
+          extractedData: doc.extractions?.[0]?.extractedData,
+        }));
+
+        setJobs(processingJobs);
+
         // Calculate stats
-        const completed = processingJobs.filter(j => j.status === 'completed').length
-        const total = processingJobs.length
-        const avgConf = processingJobs
-          .filter(j => j.confidence)
-          .reduce((sum, j) => sum + (j.confidence || 0), 0) / (completed || 1)
-        
+        const completed = processingJobs.filter(j => j.status === 'completed').length;
+        const total = processingJobs.length;
+        const avgConf =
+          processingJobs
+            .filter(j => j.confidence)
+            .reduce((sum, j) => sum + (j.confidence || 0), 0) / (completed || 1);
+
         setStats({
           totalProcessed: completed,
           successRate: total > 0 ? (completed / total) * 100 : 0,
           avgConfidence: avgConf,
           pendingJobs: processingJobs.filter(j => j.status === 'pending').length,
-          activeJobs: processingJobs.filter(j => j.status === 'processing').length
-        })
+          activeJobs: processingJobs.filter(j => j.status === 'processing').length,
+        });
       }
     } catch (error) {
-      console.error('Failed to fetch jobs:', error)
+      console.error('Failed to fetch jobs:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const processDocument = async (documentId: string) => {
-    setProcessing(true)
+    setProcessing(true);
     try {
-      const response = await fetch(`/api/documents/${documentId}/extract`, {
-        method: 'POST'
-      })
+      const response = await fetch(`/api/documents/${documentId}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          extractionType: 'TENDER_EXTRACTION',
+        }),
+      });
       if (response.ok) {
-        fetchJobs()
+        await fetchJobs();
+      } else {
+        const error = await response.json();
+        console.error('Processing failed:', error);
       }
     } catch (error) {
-      console.error('Failed to process document:', error)
+      console.error('Failed to process document:', error);
     } finally {
-      setProcessing(false)
+      setProcessing(false);
     }
-  }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed': return <CheckCircle className="h-5 w-5 text-green-500" />
-      case 'processing': return <RefreshCw className="h-5 w-5 text-blue-500 animate-spin" />
-      case 'failed': return <XCircle className="h-5 w-5 text-red-500" />
-      default: return <Clock className="h-5 w-5 text-yellow-500" />
+      case 'completed':
+        return <CheckCircle className="h-5 w-5 text-green-500" />;
+      case 'processing':
+        return <RefreshCw className="h-5 w-5 text-blue-500 animate-spin" />;
+      case 'failed':
+        return <XCircle className="h-5 w-5 text-red-500" />;
+      default:
+        return <Clock className="h-5 w-5 text-yellow-500" />;
     }
-  }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-green-100 text-green-700'
-      case 'processing': return 'bg-blue-100 text-blue-700'
-      case 'failed': return 'bg-red-100 text-red-700'
-      default: return 'bg-yellow-100 text-yellow-700'
+      case 'completed':
+        return 'bg-green-100 text-green-700';
+      case 'processing':
+        return 'bg-blue-100 text-blue-700';
+      case 'failed':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-yellow-100 text-yellow-700';
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -151,7 +163,7 @@ export default function AIProcessingPage() {
           <div className="h-96 bg-gray-200 rounded-xl" />
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -216,7 +228,9 @@ export default function AIProcessingPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Success Rate</p>
-                  <p className="text-xl font-bold text-green-600">{stats.successRate.toFixed(1)}%</p>
+                  <p className="text-xl font-bold text-green-600">
+                    {stats.successRate.toFixed(1)}%
+                  </p>
                 </div>
               </div>
             </div>
@@ -227,7 +241,9 @@ export default function AIProcessingPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Avg Confidence</p>
-                  <p className="text-xl font-bold text-blue-600">{stats.avgConfidence.toFixed(0)}%</p>
+                  <p className="text-xl font-bold text-blue-600">
+                    {stats.avgConfidence.toFixed(0)}%
+                  </p>
                 </div>
               </div>
             </div>
@@ -291,7 +307,7 @@ export default function AIProcessingPage() {
           <div className="p-4 border-b">
             <h2 className="font-semibold text-gray-900">Processing Queue</h2>
           </div>
-          
+
           {jobs.length === 0 ? (
             <div className="p-12 text-center">
               <FileText className="mx-auto h-12 w-12 text-gray-300" />
@@ -307,16 +323,17 @@ export default function AIProcessingPage() {
             </div>
           ) : (
             <div className="divide-y">
-              {jobs.map((job) => (
-                <div 
-                  key={job.id}
-                  className="p-4 hover:bg-gray-50 flex items-center gap-4"
-                >
+              {jobs.map(job => (
+                <div key={job.id} className="p-4 hover:bg-gray-50 flex items-center gap-4">
                   {getStatusIcon(job.status)}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3">
                       <h4 className="font-medium text-gray-900 truncate">{job.documentName}</h4>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                          job.status
+                        )}`}
+                      >
                         {job.status}
                       </span>
                       <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
@@ -376,14 +393,14 @@ export default function AIProcessingPage() {
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Upload for AI Processing</h2>
-              <button 
+              <button
                 onClick={() => setShowUploadModal(false)}
                 className="p-2 text-gray-400 hover:text-gray-600"
               >
                 <XCircle className="h-5 w-5" />
               </button>
             </div>
-            
+
             <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-purple-300 transition-colors">
               <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600 mb-2">Drop files here or click to browse</p>
@@ -414,7 +431,7 @@ export default function AIProcessingPage() {
             <div className="p-6 border-b sticky top-0 bg-white">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-900">Extraction Results</h2>
-                <button 
+                <button
                   onClick={() => setSelectedJob(null)}
                   className="p-2 text-gray-400 hover:text-gray-600"
                 >
@@ -432,7 +449,7 @@ export default function AIProcessingPage() {
                   <p className="text-sm text-gray-500">Confidence Score</p>
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-2 bg-gray-100 rounded-full">
-                      <div 
+                      <div
                         className="h-full bg-green-500 rounded-full"
                         style={{ width: `${selectedJob.confidence}%` }}
                       />
@@ -452,5 +469,5 @@ export default function AIProcessingPage() {
         </div>
       )}
     </div>
-  )
+  );
 }
