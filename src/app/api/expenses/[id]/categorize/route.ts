@@ -107,7 +107,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       },
     });
 
-    // Fetch available budget categories for expense classification
+    // Fetch available budget categories
     const categories = await prisma.budgetCategory.findMany({
       where: { isDeleted: false },
       select: {
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const systemPrompt = `You are an expert financial analyst specializing in expense categorization and anomaly detection for medical device distribution companies.
 
 Your task is to:
-1. Categorize expenses accurately based on description, amount, and supplier
+1. Categorize expenses accurately based on description, amount, and vendor
 2. Detect anomalies and unusual spending patterns
 3. Provide confidence scores and reasoning
 4. Identify similar historical expenses
@@ -146,18 +146,16 @@ Respond ONLY with valid JSON matching this exact structure:
   "insights": ["insight 1", "insight 2"]
 }`;
 
-    const categoryList = categories
-      .map(c => `- ${c.name}${c.description ? ` (${c.description})` : ''}`)
-      .join('\n');
+    const categoryList = categories.map(c => `- ${c.name} (${c.type})`).join('\n');
 
     const historicalSummary =
       historicalExpenses.length > 0
         ? historicalExpenses
             .map(
               e =>
-                `${e.date.toISOString().split('T')[0]}: ${e.category?.name || 'Uncategorized'} - $${
-                  e.amount
-                } - ${e.description?.substring(0, 100) || 'N/A'}`
+                `${e.expenseDate.toISOString().split('T')[0]}: ${
+                  e.category || 'Uncategorized'
+                } - $${e.amount} - ${e.description?.substring(0, 100) || 'N/A'}`
             )
             .join('\n')
         : 'No historical expenses available';
@@ -176,7 +174,7 @@ Respond ONLY with valid JSON matching this exact structure:
 **Available Categories:**
 ${categoryList}
 
-**Historical Expenses from Same Supplier (last 50):**
+**Historical Expenses from Same Vendor (last 50):**
 ${historicalSummary}
 
 **Analysis Instructions:**
@@ -185,7 +183,7 @@ ${historicalSummary}
 3. Check for anomalies:
    - Amount outliers (compare with historical average)
    - Unusual timing or frequency
-   - Mismatched supplier/category combinations
+   - Mismatched vendor/category combinations
    - Duplicate or suspicious patterns
 4. Calculate anomaly score (0-100, where 100 is highly anomalous)
 5. Determine spending pattern: REGULAR, SEASONAL, IRREGULAR
@@ -207,14 +205,15 @@ Respond with valid JSON only. No additional text.`;
     }
 
     // Parse AI response
-    let analysisData;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let analysisData: any;
     try {
       const content = aiResponse.choices[0]?.message?.content;
       const contentText =
         typeof content === 'string'
           ? content
           : Array.isArray(content)
-          ? content.map((c) => ('text' in c ? c.text : '')).join(' ')
+          ? content.map(c => ('text' in c ? c.text : '')).join(' ')
           : '';
       const jsonMatch = contentText.match(/\{[\s\S]*\}/);
       const jsonStr = jsonMatch ? jsonMatch[0] : contentText;
@@ -249,7 +248,7 @@ Respond with valid JSON only. No additional text.`;
         anomalyReasons: JSON.stringify(analysisData.anomalyReasons || []),
         similarExpenses: JSON.stringify(analysisData.similarExpenseIds || []),
         spendingPattern: analysisData.spendingPattern || 'REGULAR',
-        aiProvider: aiResponse.provider || 'gemini',
+        aiProvider: aiResponse.model || 'gemini',
         aiModel: aiResponse.model || 'gemini-1.5-flash-002',
       },
       update: {
@@ -269,8 +268,8 @@ Respond with valid JSON only. No additional text.`;
       include: {
         expense: {
           include: {
-            supplier: { select: { name: true } },
-            category: { select: { name: true } },
+            vendor: { select: { name: true } },
+            budgetCategory: { select: { name: true } },
           },
         },
       },
@@ -387,7 +386,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       },
     });
 
-    // If confirmed and category changed, update the expense category
+    // If confirmed and category changed, update the expense budget category
     if (isConfirmed && selectedCategory) {
       const newCategory = await prisma.budgetCategory.findFirst({
         where: { name: selectedCategory, isDeleted: false },
