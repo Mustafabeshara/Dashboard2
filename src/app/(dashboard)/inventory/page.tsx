@@ -217,13 +217,117 @@ export default function InventoryPage() {
 
   const generateAIInsights = useCallback(async () => {
     setLoadingAI(true)
+
+    try {
+      // Call the AI optimization API
+      const response = await fetch('/api/inventory/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        const optimization = result.data
+        const insights: AIInsight[] = []
+
+        // Convert AI optimization results to insights
+        if (optimization.insights && optimization.insights.length > 0) {
+          optimization.insights.forEach((insight: any) => {
+            insights.push({
+              type: insight.type === 'risk' ? 'warning' :
+                    insight.type === 'opportunity' ? 'info' :
+                    insight.type === 'trend' ? 'prediction' : 'info',
+              title: insight.title,
+              description: insight.description,
+              action: insight.actionable ? 'Take Action' : undefined,
+            })
+          })
+        }
+
+        // Add reorder recommendations as insights
+        if (optimization.reorderRecommendations && optimization.reorderRecommendations.length > 0) {
+          const criticalCount = optimization.reorderRecommendations.filter(
+            (r: any) => r.urgency === 'critical' || r.urgency === 'high'
+          ).length
+
+          if (criticalCount > 0) {
+            insights.push({
+              type: 'warning',
+              title: `${criticalCount} Urgent Reorder Items`,
+              description: `${criticalCount} items need immediate reordering. Total ${optimization.reorderRecommendations.length} items below reorder point.`,
+              action: 'Generate Purchase Order',
+              data: { reorderItems: optimization.reorderRecommendations },
+            })
+          }
+        }
+
+        // Add demand forecast insight
+        if (optimization.demandForecast) {
+          insights.push({
+            type: 'prediction',
+            title: 'AI Demand Forecast',
+            description: `Predicted demand: ${optimization.demandForecast.nextMonth.toLocaleString()} units (30 days), ${optimization.demandForecast.next3Months.toLocaleString()} units (90 days). Trend: ${optimization.demandForecast.trend}. Confidence: ${optimization.demandForecast.confidence}%`,
+            data: optimization.demandForecast,
+          })
+        }
+
+        // Add expiring items insight
+        if (optimization.stockOptimization?.expiringItems?.length > 0) {
+          insights.push({
+            type: 'warning',
+            title: `${optimization.stockOptimization.expiringItems.length} Items Expiring Soon`,
+            description: optimization.stockOptimization.expiringItems
+              .slice(0, 2)
+              .map((item: any) => `${item.productName}: ${item.daysUntilExpiry} days`)
+              .join(', '),
+            action: 'View Expiring Items',
+            data: { expiringItems: optimization.stockOptimization.expiringItems },
+          })
+        }
+
+        // Add inventory health metric
+        if (optimization.metrics) {
+          const healthStatus = optimization.metrics.inventoryHealth >= 80 ? 'success' :
+                              optimization.metrics.inventoryHealth >= 60 ? 'info' : 'warning'
+          insights.push({
+            type: healthStatus as any,
+            title: `Inventory Health: ${optimization.metrics.inventoryHealth}%`,
+            description: `Turnover rate: ${optimization.metrics.turnoverRate.toFixed(1)}x, Stockout risk: ${optimization.metrics.stockoutRisk.toFixed(0)}%, Potential savings: KWD ${optimization.metrics.potentialSavings.toLocaleString()}`,
+            data: optimization.metrics,
+          })
+        }
+
+        if (insights.length === 0) {
+          insights.push({
+            type: 'success',
+            title: 'Inventory Health: Excellent',
+            description: 'All stock levels are optimal. No immediate actions required.',
+          })
+        }
+
+        setAiInsights(insights)
+      } else {
+        // Fallback to basic local analysis if API fails
+        generateLocalInsights()
+      }
+    } catch (error) {
+      console.error('AI optimization error:', error)
+      // Fallback to basic local analysis
+      generateLocalInsights()
+    } finally {
+      setLoadingAI(false)
+    }
+  }, [inventory])
+
+  const generateLocalInsights = useCallback(() => {
     const insights: AIInsight[] = []
 
-    // Low stock analysis
-    const lowStockItems = inventory.filter(item => 
+    // Low stock analysis (fallback)
+    const lowStockItems = inventory.filter(item =>
       item.availableQuantity <= (item.product.minStockLevel || 10)
     )
-    
+
     if (lowStockItems.length > 0) {
       insights.push({
         type: 'warning',
@@ -233,58 +337,32 @@ export default function InventoryPage() {
       })
     }
 
-    // Expiring items analysis
+    // Expiring items analysis (fallback)
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
-    
-    const expiringItems = inventory.filter(item => 
+
+    const expiringItems = inventory.filter(item =>
       item.expiryDate && new Date(item.expiryDate) <= thirtyDaysFromNow
     )
-    
+
     if (expiringItems.length > 0) {
       insights.push({
         type: 'warning',
         title: `${expiringItems.length} Items Expiring Soon`,
-        description: `Items expiring within 30 days need attention. Consider promotional pricing or returns.`,
+        description: `Items expiring within 30 days need attention.`,
         action: 'View Expiring Items',
-      })
-    }
-
-    // Stock value optimization
-    const totalValue = inventory.reduce((sum, item) => sum + (Number(item.totalValue) || 0), 0)
-    const avgTurnover = 4.5 // Simulated industry average
-    
-    insights.push({
-      type: 'prediction',
-      title: 'Stock Turnover Forecast',
-      description: `Based on historical data, predicted monthly turnover is ${avgTurnover.toFixed(1)}x. Consider optimizing slow-moving items.`,
-      data: { turnover: avgTurnover, value: totalValue },
-    })
-
-    // Reorder recommendations
-    const needsReorder = inventory.filter(item => 
-      item.product.reorderPoint && item.availableQuantity <= item.product.reorderPoint
-    )
-    
-    if (needsReorder.length > 0) {
-      insights.push({
-        type: 'info',
-        title: 'AI Reorder Recommendations',
-        description: `${needsReorder.length} items have reached reorder point. AI suggests ordering based on lead times and demand patterns.`,
-        action: 'View Recommendations',
       })
     }
 
     if (insights.length === 0) {
       insights.push({
         type: 'success',
-        title: 'Inventory Health: Excellent',
-        description: 'All stock levels are optimal. No immediate actions required.',
+        title: 'Inventory Health: Good',
+        description: 'Basic analysis complete. Enable AI for detailed insights.',
       })
     }
 
     setAiInsights(insights)
-    setLoadingAI(false)
   }, [inventory])
 
   useEffect(() => {
