@@ -7,6 +7,7 @@
 
 import { TenderItems } from '@/components/tender/TenderItems';
 import { TenderParticipants } from '@/components/tender/TenderParticipants';
+import { TenderSpecificationAnalysis } from '@/components/tender/TenderSpecificationAnalysis';
 import { TenderSubmissionDocuments } from '@/components/tender/TenderSubmissionDocuments';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -90,6 +91,7 @@ interface TenderAnalysis {
 export default function TenderDetailPage({ params }: TenderDetailProps) {
   const { id } = use(params);
   const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tender, setTender] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -97,13 +99,6 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
   const [analyzingAI, setAnalyzingAI] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [showAnalysis, setShowAnalysis] = useState(false);
-
-  // Fetch existing analysis on mount
-  useEffect(() => {
-    if (tender?.id) {
-      fetchAnalysis();
-    }
-  }, [tender?.id]);
 
   const fetchAnalysis = async () => {
     try {
@@ -119,6 +114,8 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
     }
   };
 
+  // Handler for SWOT analysis (used by analysis button in sidebar)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleAnalyzeTender = async () => {
     setAnalyzingAI(true);
     setAnalysisError(null);
@@ -134,15 +131,25 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
       const data = await response.json();
       setAnalysis(data.analysis);
       setShowAnalysis(true);
-    } catch (error: any) {
-      setAnalysisError(error.message || 'Failed to analyze tender');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to analyze tender';
+      setAnalysisError(message);
     } finally {
       setAnalyzingAI(false);
     }
   };
 
+  // Fetch existing analysis on mount
+  useEffect(() => {
+    if (tender?.id) {
+      fetchAnalysis();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tender?.id]);
+
   useEffect(() => {
     fetchTender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchTender = async () => {
@@ -670,6 +677,12 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
             }
           />
 
+          {/* AI Specification Analysis - Manufacturers & Competitors */}
+          <TenderSpecificationAnalysis
+            tenderId={tender.id}
+            tenderTitle={tender.title}
+          />
+
           {/* Products/Items (Legacy - for old tenders) */}
           {products.length > 0 && (
             <Card>
@@ -681,6 +694,7 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {products.map((item: any, index: number) => (
                     <div key={index} className="border rounded-lg p-4">
                       <div className="flex items-start justify-between">
