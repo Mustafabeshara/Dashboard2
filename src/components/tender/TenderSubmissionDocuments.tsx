@@ -414,7 +414,7 @@ export function TenderSubmissionDocuments({
                               {doc.uploadedBy && (
                                 <>
                                   <span>•</span>
-                                  <span>by {doc.uploadedBy.name}</span>
+                                  <span>by {doc.uploadedBy.fullName}</span>
                                 </>
                               )}
                             </div>
