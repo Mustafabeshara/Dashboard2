@@ -153,33 +153,42 @@ export const TASK_MODELS = {
 };
 
 // Enhanced tender extraction prompt from Dashboard (proven with real MOH documents)
+// Bilingual system supporting both Arabic and English tender documents
 export const TENDER_EXTRACTION_SYSTEM_PROMPT =
-  'You are an expert OCR and document extraction system specialized in medical tender documents. You excel at reading tables, mixed-language text (Arabic/English), and extracting structured data with high accuracy. Always return valid JSON without markdown formatting.';
+  'You are a bilingual expert OCR and document extraction system specialized in medical tender documents from Kuwait and the Middle East. You excel at reading and processing documents in both Arabic (العربية) and English, including: bidirectional text (RTL/LTR), mixed-language tables, Arabic diacritics, Arabic and Western numerals, and complex multi-column bilingual layouts. You extract structured data with high accuracy from both clear and low-quality scans. Always return valid JSON without markdown formatting.';
 
-export const TENDER_EXTRACTION_PROMPT = `You are an expert document OCR and data extraction system. Carefully analyze this tender document image/PDF.
+export const TENDER_EXTRACTION_PROMPT = `You are a bilingual expert document OCR and data extraction system. Carefully analyze this tender document image/PDF.
+
+🌍 BILINGUAL PROCESSING: This system handles documents in BOTH Arabic (العربية) and English.
+Many Kuwait government tender documents are bilingual with Arabic on the right and English on the left.
 
 The document may contain:
-- Mixed Arabic and English text
-- Tables with multiple columns
-- Scanned or photographed content
-- Headers, footers, and logos
+- Mixed Arabic and English text (bidirectional RTL/LTR)
+- Bilingual tables with multiple columns
+- Arabic diacritics (تشكيل) and special characters
+- Arabic numerals (٠١٢٣٤٥٦٧٨٩) and Western numerals (0123456789)
+- Scanned or photographed content (may be low quality)
+- Headers, footers, logos, and watermarks
+- Government seals and stamps
 
 Your task: Extract structured data and return ONLY valid JSON (no markdown, no explanations).
 
 Required JSON structure:
 {
   "reference": "tender reference number",
-  "title": "tender title/subject",
-  "organization": "issuing organization name",
+  "title": "tender title/subject (preserve original language)",
+  "organization": "issuing organization name (bilingual if available)",
   "closingDate": "YYYY-MM-DD",
   "items": [
     {
-      "itemDescription": "full item description",
+      "itemDescription": "full item description (preserve original language)",
       "quantity": number,
-      "unit": "unit of measurement"
+      "unit": "unit of measurement (preserve original language)",
+      "specifications": "detailed specs if available"
     }
   ],
-  "notes": "additional requirements or instructions",
+  "notes": "additional requirements or instructions (bilingual if available)",
+  "language": "ar | en | ar-en",
   "confidence": {
     "overall": 0.0-1.0,
     "reference": 0.0-1.0,
@@ -190,82 +199,110 @@ Required JSON structure:
   }
 }
 
-Extraction Rules:
+Extraction Rules (مرجع القواعد):
 
-1. REFERENCE NUMBER (CRITICAL - EXACT EXTRACTION REQUIRED):
-   - Look for these keywords EXACTLY:
-     * Arabic: "ملف رقم", "رقم الملف", "إستدراج عروض لملف رقم", "مناقصة رقم"
-     * English: "File No", "File No.", "Tender No", "Tender No.", "RFQ", "Reference No", "Ref:"
-   - Extract ONLY the alphanumeric code following these keywords
-   - Examples:
+1. REFERENCE NUMBER / رقم المرجع (CRITICAL):
+   - Look for keywords in BOTH languages:
+     * Arabic: "ملف رقم", "رقم الملف", "إستدراج عروض لملف رقم", "مناقصة رقم", "رقم المناقصة", "م.ع.ر"
+     * English: "File No", "File No.", "Tender No", "Tender No.", "RFQ", "Reference No", "Ref:", "Ref. No."
+   - Extract ONLY alphanumeric code following keywords
+   - Bilingual examples (أمثلة):
      * "إستدراج عروض لملف رقم: 5SSN11" → "5SSN11"
      * "File No: MOH-2025-123" → "MOH-2025-123"
      * "Tender No. T-456/2025" → "T-456/2025"
      * "ملف رقم 789ABC" → "789ABC"
-   - DO NOT include punctuation (:, ., etc.) in the reference
-   - DO NOT extract dates or other numbers as the reference
+     * "م.ع.ر رقم 1234/2025" → "1234/2025"
+   - DO NOT include punctuation (:, ., etc.)
+   - DO NOT extract dates as reference
+   - If same reference in both languages, extract once
 
-2. TITLE:
-   - Extract the main subject line (Arabic or English)
-   - Example: "شراء لوازم طبية مستهلكات" or "Medical Disposables Purchase"
+2. TITLE / العنوان:
+   - Extract main subject in original language(s)
+   - Bilingual docs may include both: "شراء أجهزة طبية / Medical Equipment Purchase"
+   - Preserve technical/medical terms exactly
 
-3. ORGANIZATION:
-   - Look for: "وزارة الصحة", "Ministry of Health", "إدارة المستودعات الطبية", "MEDICAL STORE ADMINISTRATION"
-   - Include both ministry and department if present
-   - Example: "Ministry of Health - Medical Store Administration"
+3. ORGANIZATION / الجهة المصدرة:
+   - Look for in BOTH languages:
+     * Arabic: "وزارة الصحة", "إدارة المستودعات الطبية", "إدارة العقود", "إدارة المشتريات"
+     * English: "Ministry of Health", "MOH", "MEDICAL STORE ADMINISTRATION", "Contracts Department"
+   - Include ministry + department if present
+   - Example: "وزارة الصحة - إدارة المستودعات / Ministry of Health - Medical Store"
 
-4. CLOSING DATE:
-   - Look for: "CLOSING DATE", "تاريخ الإغلاق", "BEFORE"
+4. CLOSING DATE / تاريخ الإغلاق:
+   - Look for in BOTH languages:
+     * Arabic: "تاريخ الإغلاق", "آخر موعد", "ينتهي في", "قبل"
+     * English: "CLOSING DATE", "DEADLINE", "BEFORE", "LAST DATE"
    - Convert to YYYY-MM-DD format
-   - Examples: "26/11/2025" → "2025-11-26", "26-11-2025" → "2025-11-26"
+   - Handle: "26/11/2025", "26-11-2025", "٢٦/١١/٢٠٢٥", "November 26, 2025" → "2025-11-26"
 
-5. ITEMS TABLE (EXTRACT EVERY SINGLE ROW AS SEPARATE ITEMS):
-   - Identify table with columns like: SL No / ITEM DESCRIPTION / UNIT / QUANTITY
-   - Extract EVERY row as a SEPARATE item in the items array
-   - DO NOT combine or summarize items - each row is one array item
-   - For item description: 
-     * Include full text exactly as written
-     * Preserve technical/medical terms
-     * Include any catalog numbers or codes
-   - For quantity: Extract numeric value only
-     * "600" → 600
-     * "Six Hundred Only" → 600
-     * "1,000" → 1000
-     * "2-3 units" → 3 (use higher number)
-   - For unit: Extract as written (PCS, pieces, boxes, units, sets, kits, etc.)
-   - IMPORTANT: If table has 50 rows, return 50 items in the array
-   - Example output structure:
+5. ITEMS TABLE / جدول الأصناف (EXTRACT EVERY ROW):
+   - Identify table headers in Arabic OR English:
+     * Arabic: "الرقم", "الصنف", "الوصف", "الكمية", "الوحدة", "المواصفات"
+     * English: "SL No", "ITEM", "DESCRIPTION", "QUANTITY", "QTY", "UNIT", "SPECIFICATIONS"
+   - Extract EVERY row as SEPARATE item (each row = one array item)
+   - DO NOT combine/summarize - if 50 rows, return 50 items
+   
+   Item description (وصف الصنف):
+     * Preserve EXACTLY as written in original language
+     * Include technical/medical terms, catalog numbers, codes
+     * Examples:
+       - "قفازات جراحية مقاس 7 / Surgical Gloves Size 7"
+       - "حقن 5 مل معقمة / Syringes 5ml Sterile"
+   
+   Quantity (الكمية):
+     * Extract numeric value only
+     * Handle: "600", "٦٠٠", "ستمائة/Six Hundred" → 600
+     * Handle: "1,000", "١٬٠٠٠" → 1000
+     * Range "2-3 units" or "٢-٣" → 3 (use higher)
+   
+   Unit (الوحدة):
+     * Keep original language (DON'T translate)
+     * Arabic: "قطعة", "صندوق", "علبة", "وحدة", "مجموعة"
+     * English: "PCS", "pieces", "boxes", "units", "sets", "kits"
+   
+   Example bilingual output:
      "items": [
-       {"itemDescription": "Surgical Gloves Size 7", "quantity": 100, "unit": "boxes"},
-       {"itemDescription": "Syringes 5ml Sterile", "quantity": 500, "unit": "PCS"},
-       {"itemDescription": "Bandages Elastic 10cm", "quantity": 200, "unit": "units"}
+       {"itemDescription": "قفازات جراحية مقاس 7.5 / Surgical Gloves Size 7.5", "quantity": 100, "unit": "صندوق/Box"},
+       {"itemDescription": "حقن انسولين 1 مل / Insulin Syringes 1ml", "quantity": 5000, "unit": "قطعة/PCS"},
+       {"itemDescription": "ضمادات / Bandages", "quantity": 250, "unit": "لفة/Roll"}
      ]
 
-6. NOTES:
-   - Extract special requirements, instructions, or conditions
-   - Look for sections about: samples, certificates, delivery, documentation
-   - Include any important footnotes or asterisk notes
+6. NOTES / ملاحظات:
+   - Extract requirements, instructions, conditions in BOTH languages
+   - Look for: "ملاحظات"/"Notes", "شروط"/"Conditions", "عينات"/"Samples", "شهادات"/"Certificates"
+   - Include footnotes and asterisk notes (*)
+   - Example: "يجب تقديم عينات / Samples must be submitted"
 
-OCR Tips:
-- Read text carefully, including small print and footnotes
-- Preserve exact spelling of medical/technical terms
-- Handle both clear and low-quality scans
-- Recognize table structures even if lines are faint
-- Process multi-column layouts correctly
+7. LANGUAGE DETECTION / تحديد اللغة:
+   - Set "language" field: "ar" (Arabic only), "en" (English only), "ar-en" (bilingual)
 
-7. CONFIDENCE SCORES:
-   - Rate extraction confidence for each field (0.0 = uncertain, 1.0 = certain)
-   - Base confidence on:
-     * Text clarity and readability
-     * Presence of expected keywords/patterns
-     * Completeness of extracted data
+OCR Tips for Bilingual Documents (نصائح):
+- Process RTL (Arabic) and LTR (English) text
+- Handle Arabic diacritics: َ ً ُ ٌ ِ ٍ ّ ْ
+- Recognize Arabic (٠-٩) and Western (0-9) numerals
+- Kuwait govt layout: Arabic right, English left
+- Read tables carefully - preserve exact terms
+- Handle clear and low-quality scans
+- Recognize faint table borders
+
+8. CONFIDENCE SCORES / درجة الثقة:
+   - Rate extraction confidence (0.0 = uncertain/غير متأكد, 1.0 = certain/متأكد)
+   - Base on:
+     * Text clarity in both languages
+     * Expected keywords found in either language
+     * Data completeness
+     * Consistency between Arabic/English (if bilingual)
+     * OCR accuracy
    - overall: Average of all field confidences
-   - Lower confidence if:
-     * Text is blurry or partially obscured
-     * Expected patterns not found
-     * Had to make assumptions
+   - Lower if:
+     * Text blurry/obscured
+     * Patterns not found
+     * Inconsistencies between languages
+     * Had to guess/assume
+     * Heavy OCR errors
 
-Return ONLY the JSON object. No markdown code blocks, no explanations.`;
+Return ONLY the JSON object. No markdown, no explanations.
+JSON فقط بدون تنسيق أو شرح`;
 
 // Extraction prompts for different document types
 export const EXTRACTION_PROMPTS = {

@@ -5,11 +5,15 @@
 
 import { z } from 'zod';
 
-// Schema for individual tender items (AI extraction)
+// Schema for individual tender items (AI extraction) - Bilingual support
 export const tenderItemSchema = z.object({
-  itemDescription: z.string().min(1, 'Item description is required'),
+  itemDescription: z
+    .string()
+    .min(1, 'Item description is required')
+    .max(1000, 'Item description must be less than 1000 characters'), // Increased for bilingual descriptions
   quantity: z.number().int().positive('Quantity must be a positive integer'),
-  unit: z.string().min(1, 'Unit is required').max(20, 'Unit must be less than 20 characters'),
+  unit: z.string().min(1, 'Unit is required').max(50, 'Unit must be less than 50 characters'), // Increased for bilingual units like "صندوق/Box"
+  specifications: z.string().max(1000).optional(), // Optional specs field
 });
 
 // Schema for tender item in database (with participation flag)
@@ -36,7 +40,7 @@ export const confidenceSchema = z
   })
   .optional();
 
-// Schema for tender extraction result
+// Schema for tender extraction result (with bilingual support)
 export const tenderExtractionSchema = z.object({
   reference: z
     .string()
@@ -45,14 +49,15 @@ export const tenderExtractionSchema = z.object({
   title: z
     .string()
     .min(1, 'Tender title is required')
-    .max(200, 'Title must be less than 200 characters'),
+    .max(500, 'Title must be less than 500 characters'), // Increased for bilingual titles
   organization: z
     .string()
     .min(1, 'Organization is required')
-    .max(100, 'Organization must be less than 100 characters'),
+    .max(300, 'Organization must be less than 300 characters'), // Increased for bilingual org names
   closingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Closing date must be in YYYY-MM-DD format'),
   items: z.array(tenderItemSchema).min(1, 'At least one item is required'),
-  notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional().default(''),
+  notes: z.string().max(2000, 'Notes must be less than 2000 characters').optional().default(''), // Increased for bilingual notes
+  language: z.enum(['ar', 'en', 'ar-en']).optional().default('en'), // Language detection
   confidence: confidenceSchema,
 });
 
