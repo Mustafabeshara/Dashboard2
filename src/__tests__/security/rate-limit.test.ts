@@ -3,30 +3,47 @@
  * Tests rate limiting functionality for API protection
  */
 
-import { NextRequest } from 'next/server';
 import { rateLimiter, RateLimitPresets } from '@/lib/rate-limit';
 
-// Helper to create mock NextRequest
-function createMockRequest(ip: string = '127.0.0.1', path: string = '/api/test'): NextRequest {
-  const url = new URL(path, 'http://localhost:3000');
+// Mock NextRequest for testing
+class MockNextRequest {
+  headers: Map<string, string>;
+  nextUrl: { pathname: string };
+  method: string;
+
+  constructor(ip: string = '127.0.0.1', path: string = '/api/test') {
+    this.headers = new Map([['x-forwarded-for', ip]]);
+    this.nextUrl = { pathname: path };
+    this.method = 'POST';
+  }
+
+  // Implement headers.get() method
+  getHeaders() {
+    return {
+      get: (key: string) => this.headers.get(key) || null,
+    };
+  }
+}
+
+// Helper to create mock request that matches NextRequest interface
+function createMockRequest(ip: string = '127.0.0.1', path: string = '/api/test'): any {
   return {
-    headers: new Headers({
-      'x-forwarded-for': ip,
-    }),
-    nextUrl: url,
+    headers: {
+      get: (key: string) => {
+        if (key === 'x-forwarded-for') return ip;
+        if (key === 'x-real-ip') return null;
+        return null;
+      },
+    },
+    nextUrl: { pathname: path },
     method: 'POST',
-  } as unknown as NextRequest;
+  };
 }
 
 describe('Rate Limiter', () => {
-  beforeEach(() => {
-    // Reset the rate limiter for each test
-    // Note: In production, we'd need a proper reset mechanism
-  });
-
   describe('Basic Rate Limiting', () => {
     it('should allow requests within limit', () => {
-      const request = createMockRequest('192.168.1.1', '/api/basic-test');
+      const request = createMockRequest('192.168.1.100', '/api/basic-test-1');
       const config = { windowMs: 60000, maxRequests: 5 };
 
       const result = rateLimiter.check(request, config);
@@ -35,7 +52,7 @@ describe('Rate Limiter', () => {
     });
 
     it('should track remaining requests', () => {
-      const request = createMockRequest('192.168.1.2', '/api/track-test');
+      const request = createMockRequest('192.168.1.101', '/api/track-test-1');
       const config = { windowMs: 60000, maxRequests: 3 };
 
       let result = rateLimiter.check(request, config);
@@ -49,7 +66,7 @@ describe('Rate Limiter', () => {
     });
 
     it('should block requests exceeding limit', () => {
-      const request = createMockRequest('192.168.1.3', '/api/block-test');
+      const request = createMockRequest('192.168.1.102', '/api/block-test-1');
       const config = { windowMs: 60000, maxRequests: 2 };
 
       rateLimiter.check(request, config); // 1
@@ -61,7 +78,7 @@ describe('Rate Limiter', () => {
     });
 
     it('should provide reset time', () => {
-      const request = createMockRequest('192.168.1.4', '/api/reset-test');
+      const request = createMockRequest('192.168.1.103', '/api/reset-test-1');
       const config = { windowMs: 60000, maxRequests: 5 };
 
       const result = rateLimiter.check(request, config);
@@ -72,16 +89,16 @@ describe('Rate Limiter', () => {
 
   describe('Per-User Rate Limiting', () => {
     it('should separate rate limits by identifier', () => {
-      const request = createMockRequest('192.168.1.5', '/api/user-test');
+      const request = createMockRequest('192.168.1.104', '/api/user-test-1');
       const config = { windowMs: 60000, maxRequests: 2 };
 
       // User 1 uses their quota
-      rateLimiter.check(request, config, 'user:1');
-      rateLimiter.check(request, config, 'user:1');
-      const user1Result = rateLimiter.check(request, config, 'user:1');
+      rateLimiter.check(request, config, 'user:test1');
+      rateLimiter.check(request, config, 'user:test1');
+      const user1Result = rateLimiter.check(request, config, 'user:test1');
 
       // User 2 should have their own quota
-      const user2Result = rateLimiter.check(request, config, 'user:2');
+      const user2Result = rateLimiter.check(request, config, 'user:test2');
 
       expect(user1Result.allowed).toBe(false);
       expect(user2Result.allowed).toBe(true);
@@ -109,13 +126,23 @@ describe('Rate Limiter', () => {
       expect(RateLimitPresets.UPLOAD.maxRequests).toBe(20);
       expect(RateLimitPresets.UPLOAD.windowMs).toBe(60 * 60 * 1000);
     });
+
+    it('should have STANDARD preset for general API use', () => {
+      expect(RateLimitPresets.STANDARD.maxRequests).toBe(100);
+      expect(RateLimitPresets.STANDARD.windowMs).toBe(15 * 60 * 1000);
+    });
+
+    it('should have RELAXED preset for public endpoints', () => {
+      expect(RateLimitPresets.RELAXED.maxRequests).toBe(300);
+      expect(RateLimitPresets.RELAXED.windowMs).toBe(15 * 60 * 1000);
+    });
   });
 
   describe('Reset Functionality', () => {
     it('should reset rate limit for a specific identifier', () => {
-      const request = createMockRequest('192.168.1.6', '/api/reset-specific');
+      const request = createMockRequest('192.168.1.105', '/api/reset-specific-1');
       const config = { windowMs: 60000, maxRequests: 2 };
-      const identifier = 'user:reset-test';
+      const identifier = 'user:reset-test-unique';
 
       // Use up the quota
       rateLimiter.check(request, config, identifier);
@@ -129,6 +156,24 @@ describe('Rate Limiter', () => {
       // Should be allowed again
       result = rateLimiter.check(request, config, identifier);
       expect(result.allowed).toBe(true);
+    });
+  });
+
+  describe('IP-based Rate Limiting', () => {
+    it('should use IP from x-forwarded-for header', () => {
+      const request1 = createMockRequest('10.0.0.1', '/api/ip-test');
+      const request2 = createMockRequest('10.0.0.2', '/api/ip-test');
+      const config = { windowMs: 60000, maxRequests: 1 };
+
+      // First IP uses quota
+      rateLimiter.check(request1, config);
+      const result1 = rateLimiter.check(request1, config);
+
+      // Second IP should have its own quota
+      const result2 = rateLimiter.check(request2, config);
+
+      expect(result1.allowed).toBe(false);
+      expect(result2.allowed).toBe(true);
     });
   });
 });

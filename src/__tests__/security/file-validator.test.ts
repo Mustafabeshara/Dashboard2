@@ -96,8 +96,12 @@ describe('File Validator', () => {
   });
 
   describe('sanitizeFilename', () => {
-    it('should remove path traversal attempts', () => {
-      expect(sanitizeFilename('../../../etc/passwd')).toBe('etc_passwd');
+    it('should remove path traversal attempts and replace slashes', () => {
+      // '../../../etc/passwd' -> '' + '/' replaced with '_' -> '___etc_passwd'
+      const result = sanitizeFilename('../../../etc/passwd');
+      expect(result).toBe('___etc_passwd');
+      expect(result).not.toContain('..');
+      expect(result).not.toContain('/');
     });
 
     it('should remove special characters', () => {
@@ -117,6 +121,10 @@ describe('File Validator', () => {
 
     it('should handle filenames with multiple dots', () => {
       expect(sanitizeFilename('file.backup.tar.gz')).toBe('file.backup.tar.gz');
+    });
+
+    it('should replace spaces with underscores', () => {
+      expect(sanitizeFilename('my file name.txt')).toBe('my_file_name.txt');
     });
   });
 
@@ -142,9 +150,16 @@ describe('File Validator', () => {
       expect(timestamp).toBeLessThanOrEqual(after);
     });
 
-    it('should handle files without extension', () => {
+    it('should handle files without extension by using last segment', () => {
+      // 'noextension'.split('.').pop() returns 'noextension'
+      // So it becomes: timestamp-random.noextension
       const name = generateSecureFilename('noextension');
-      expect(name).toMatch(/^\d+-[a-f0-9]+$/);
+      expect(name).toMatch(/^\d+-[a-f0-9]+\.noextension$/);
+    });
+
+    it('should handle files with proper extension', () => {
+      const name = generateSecureFilename('document.docx');
+      expect(name).toMatch(/^\d+-[a-f0-9]+\.docx$/);
     });
   });
 
