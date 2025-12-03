@@ -1,44 +1,42 @@
 /**
  * Budget Creation Wizard - 4-Step Form
  */
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useForm, useFieldArray } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { toast } from 'sonner'
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  Trash2,
-  Save,
-  Send,
-  Building2,
-  Calendar,
-  Wallet,
-  Settings,
-  FileText,
-} from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { cn, formatCurrency } from '@/lib/utils'
-import type { BudgetType, CategoryType } from '@/types'
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { cn, formatCurrency } from '@/lib/utils';
+import type { BudgetType, CategoryType } from '@/types';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  Building2,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Plus,
+  Save,
+  Send,
+  Trash2,
+  Wallet,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { useFieldArray, useForm } from 'react-hook-form';
+import { toast } from 'sonner';
+import { z } from 'zod';
 
 // Validation schema
 const budgetSchema = z.object({
@@ -64,16 +62,16 @@ const budgetSchema = z.object({
       notes: z.string().optional(),
     })
   ),
-})
+});
 
-type BudgetFormData = z.infer<typeof budgetSchema>
+type BudgetFormData = z.infer<typeof budgetSchema>;
 
 const steps = [
   { id: 1, title: 'Basic Information', description: 'Budget name and period', icon: FileText },
   { id: 2, title: 'Categories', description: 'Define budget categories', icon: Building2 },
   { id: 3, title: 'Allocations', description: 'Assign amounts', icon: Wallet },
   { id: 4, title: 'Review & Submit', description: 'Review and finalize', icon: Check },
-]
+];
 
 const departmentOptions = [
   'Sales',
@@ -84,7 +82,7 @@ const departmentOptions = [
   'Administration',
   'IT',
   'HR',
-]
+];
 
 const defaultCategories = [
   { name: 'Operating Expenses', code: 'OE-0001', type: 'EXPENSE' as CategoryType },
@@ -95,12 +93,12 @@ const defaultCategories = [
   { name: 'Professional Services', code: 'PS-0001', type: 'EXPENSE' as CategoryType },
   { name: 'Capital Expenditure', code: 'CE-0001', type: 'CAPITAL' as CategoryType },
   { name: 'Sales Revenue', code: 'SR-0001', type: 'REVENUE' as CategoryType },
-]
+];
 
 export default function CreateBudgetPage() {
-  const router = useRouter()
-  const [currentStep, setCurrentStep] = useState(1)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const router = useRouter();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
@@ -108,6 +106,7 @@ export default function CreateBudgetPage() {
     control,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<BudgetFormData>({
     resolver: zodResolver(budgetSchema) as any,
@@ -122,66 +121,117 @@ export default function CreateBudgetPage() {
       notes: '',
       categories: [],
     },
-  })
+  });
 
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'categories',
-  })
+  });
 
-  const watchedValues = watch()
+  const watchedValues = watch();
   const totalAllocated = fields.reduce((sum, _, index) => {
-    const amount = watchedValues.categories?.[index]?.allocatedAmount || 0
-    return sum + amount
-  }, 0)
+    const amount = watchedValues.categories?.[index]?.allocatedAmount || 0;
+    return sum + amount;
+  }, 0);
 
-  const remaining = watchedValues.totalAmount - totalAllocated
+  const remaining = watchedValues.totalAmount - totalAllocated;
 
   const addDefaultCategories = () => {
-    defaultCategories.forEach((cat) => {
+    defaultCategories.forEach(cat => {
       append({
         name: cat.name,
         code: cat.code,
         type: cat.type,
         allocatedAmount: 0,
         varianceThreshold: 10,
-      })
-    })
-  }
+      });
+    });
+  };
 
   const onSubmit = async (data: BudgetFormData) => {
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      toast.success('Budget created successfully!')
-      router.push('/budgets')
+      const response = await fetch('/api/budgets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name,
+          fiscalYear: data.fiscalYear,
+          type: data.type,
+          department: data.department,
+          totalAmount: parseFloat(data.totalAmount.toString()),
+          startDate: data.startDate,
+          endDate: data.endDate,
+          currency: data.currency || 'KWD',
+          notes: data.notes,
+          categories:
+            data.categories?.map(cat => ({
+              name: cat.name,
+              code: cat.code,
+              type: cat.type,
+              allocatedAmount: parseFloat(cat.allocatedAmount.toString()),
+              varianceThreshold: cat.varianceThreshold || 10,
+              requiresApprovalOver: cat.requiresApprovalOver,
+              notes: cat.notes,
+            })) || [],
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create budget');
+      }
+
+      const result = await response.json();
+      toast.success('Budget created successfully!');
+      router.push(`/budgets/${result.data.id}`);
     } catch (error) {
-      toast.error('Failed to create budget. Please try again.')
+      console.error('Budget creation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create budget');
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const saveDraft = async () => {
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      toast.success('Draft saved successfully!')
+      const formValues = getValues();
+      const response = await fetch('/api/budgets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formValues,
+          totalAmount: parseFloat(formValues.totalAmount.toString()),
+          status: 'DRAFT',
+          categories:
+            formValues.categories?.map((cat: any) => ({
+              ...cat,
+              allocatedAmount: parseFloat(cat.allocatedAmount.toString()),
+            })) || [],
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save draft');
+      }
+
+      toast.success('Draft saved successfully!');
     } catch (error) {
-      toast.error('Failed to save draft.')
+      toast.error('Failed to save draft.');
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const nextStep = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1)
-  }
+    if (currentStep < 4) setCurrentStep(currentStep + 1);
+  };
 
   const prevStep = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1)
-  }
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
@@ -202,9 +252,9 @@ export default function CreateBudgetPage() {
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => {
-              const StepIcon = step.icon
-              const isCompleted = currentStep > step.id
-              const isCurrent = currentStep === step.id
+              const StepIcon = step.icon;
+              const isCompleted = currentStep > step.id;
+              const isCurrent = currentStep === step.id;
 
               return (
                 <div key={step.id} className="flex items-center">
@@ -246,7 +296,7 @@ export default function CreateBudgetPage() {
                     />
                   )}
                 </div>
-              )
+              );
             })}
           </div>
         </CardContent>
@@ -271,22 +321,20 @@ export default function CreateBudgetPage() {
                     error={!!errors.name}
                     {...register('name')}
                   />
-                  {errors.name && (
-                    <p className="text-sm text-red-500">{errors.name.message}</p>
-                  )}
+                  {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="fiscalYear">Fiscal Year *</Label>
                   <Select
                     value={watchedValues.fiscalYear?.toString()}
-                    onValueChange={(v) => setValue('fiscalYear', parseInt(v))}
+                    onValueChange={v => setValue('fiscalYear', parseInt(v))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select year" />
                     </SelectTrigger>
                     <SelectContent>
-                      {[2023, 2024, 2025, 2026].map((year) => (
+                      {[2023, 2024, 2025, 2026].map(year => (
                         <SelectItem key={year} value={year.toString()}>
                           {year}
                         </SelectItem>
@@ -299,7 +347,7 @@ export default function CreateBudgetPage() {
                   <Label htmlFor="type">Budget Type *</Label>
                   <Select
                     value={watchedValues.type}
-                    onValueChange={(v) => setValue('type', v as BudgetType)}
+                    onValueChange={v => setValue('type', v as BudgetType)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
@@ -318,13 +366,13 @@ export default function CreateBudgetPage() {
                     <Label htmlFor="department">Department</Label>
                     <Select
                       value={watchedValues.department}
-                      onValueChange={(v) => setValue('department', v)}
+                      onValueChange={v => setValue('department', v)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>
                       <SelectContent>
-                        {departmentOptions.map((dept) => (
+                        {departmentOptions.map(dept => (
                           <SelectItem key={dept} value={dept}>
                             {dept}
                           </SelectItem>
@@ -352,7 +400,7 @@ export default function CreateBudgetPage() {
                   <Label htmlFor="currency">Currency</Label>
                   <Select
                     value={watchedValues.currency}
-                    onValueChange={(v) => setValue('currency', v)}
+                    onValueChange={v => setValue('currency', v)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -413,12 +461,7 @@ export default function CreateBudgetPage() {
                 <CardDescription>Define the categories for this budget</CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addDefaultCategories}
-                >
+                <Button type="button" variant="outline" size="sm" onClick={addDefaultCategories}>
                   Add Default Categories
                 </Button>
                 <Button
@@ -445,7 +488,9 @@ export default function CreateBudgetPage() {
                 <div className="text-center py-8 text-gray-500">
                   <Building2 className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                   <p>No categories added yet</p>
-                  <p className="text-sm">Click &quot;Add Default Categories&quot; or add custom ones</p>
+                  <p className="text-sm">
+                    Click &quot;Add Default Categories&quot; or add custom ones
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -463,16 +508,13 @@ export default function CreateBudgetPage() {
                       </div>
                       <div className="col-span-2 space-y-2">
                         <Label>Code</Label>
-                        <Input
-                          placeholder="XX-0000"
-                          {...register(`categories.${index}.code`)}
-                        />
+                        <Input placeholder="XX-0000" {...register(`categories.${index}.code`)} />
                       </div>
                       <div className="col-span-2 space-y-2">
                         <Label>Type</Label>
                         <Select
                           value={watchedValues.categories?.[index]?.type}
-                          onValueChange={(v) =>
+                          onValueChange={v =>
                             setValue(`categories.${index}.type`, v as CategoryType)
                           }
                         >
@@ -543,9 +585,7 @@ export default function CreateBudgetPage() {
                 />
                 <div className="flex items-center justify-between mt-2 text-sm">
                   <span>Allocated: {formatCurrency(totalAllocated)}</span>
-                  <span
-                    className={remaining < 0 ? 'text-red-600 font-medium' : 'text-gray-600'}
-                  >
+                  <span className={remaining < 0 ? 'text-red-600 font-medium' : 'text-gray-600'}>
                     Remaining: {formatCurrency(remaining)}
                   </span>
                 </div>
@@ -577,9 +617,7 @@ export default function CreateBudgetPage() {
                           {watchedValues.categories?.[index]?.type}
                         </Badge>
                         <div>
-                          <p className="font-medium">
-                            {watchedValues.categories?.[index]?.name}
-                          </p>
+                          <p className="font-medium">{watchedValues.categories?.[index]?.name}</p>
                           <p className="text-xs text-gray-500">
                             {watchedValues.categories?.[index]?.code}
                           </p>
@@ -649,9 +687,7 @@ export default function CreateBudgetPage() {
 
               {/* Categories Summary */}
               <div className="p-4 bg-gray-50 rounded-lg space-y-3">
-                <h3 className="font-semibold">
-                  Categories ({fields.length})
-                </h3>
+                <h3 className="font-semibold">Categories ({fields.length})</h3>
                 {fields.length > 0 ? (
                   <div className="space-y-2">
                     {fields.map((field, index) => (
@@ -663,22 +699,16 @@ export default function CreateBudgetPage() {
                           <Badge variant="secondary" className="text-xs">
                             {watchedValues.categories?.[index]?.type}
                           </Badge>
-                          <span className="text-sm">
-                            {watchedValues.categories?.[index]?.name}
-                          </span>
+                          <span className="text-sm">{watchedValues.categories?.[index]?.name}</span>
                         </div>
                         <span className="font-medium text-sm">
-                          {formatCurrency(
-                            watchedValues.categories?.[index]?.allocatedAmount || 0
-                          )}
+                          {formatCurrency(watchedValues.categories?.[index]?.allocatedAmount || 0)}
                         </span>
                       </div>
                     ))}
                     <div className="flex items-center justify-between pt-2 border-t">
                       <span className="font-semibold">Total Allocated</span>
-                      <span className="font-bold text-lg">
-                        {formatCurrency(totalAllocated)}
-                      </span>
+                      <span className="font-bold text-lg">{formatCurrency(totalAllocated)}</span>
                     </div>
                     {remaining !== 0 && (
                       <div
@@ -709,12 +739,7 @@ export default function CreateBudgetPage() {
 
         {/* Navigation Buttons */}
         <div className="flex items-center justify-between pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={prevStep}
-            disabled={currentStep === 1}
-          >
+          <Button type="button" variant="outline" onClick={prevStep} disabled={currentStep === 1}>
             <ChevronLeft className="h-4 w-4 mr-2" />
             Previous
           </Button>
@@ -741,5 +766,5 @@ export default function CreateBudgetPage() {
         </div>
       </form>
     </div>
-  )
+  );
 }

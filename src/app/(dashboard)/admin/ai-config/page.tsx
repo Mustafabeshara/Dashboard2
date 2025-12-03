@@ -31,9 +31,9 @@ interface AIProvider {
 
 const PROVIDER_OPTIONS = [
   { value: 'groq', label: 'Groq', models: ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'] },
-  { value: 'gemini', label: 'Google Gemini', models: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'] },
-  { value: 'google_ai', label: 'Google AI Studio', models: ['gemini-1.5-pro', 'gemini-1.5-flash'] },
-  { value: 'anthropic', label: 'Anthropic Claude', models: ['claude-3-haiku-20240307', 'claude-3-sonnet-20240229', 'claude-3-opus-20240229'] },
+  { value: 'gemini', label: 'Google Gemini', models: ['gemini-2.0-flash', 'gemini-2.0-flash-exp'] },
+  { value: 'google_ai', label: 'Google AI Studio', models: ['gemini-2.0-flash', 'gemini-2.0-flash-exp'] },
+  { value: 'anthropic', label: 'Anthropic Claude', models: ['claude-3-haiku-20240307', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'] },
   { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'] },
 ]
 

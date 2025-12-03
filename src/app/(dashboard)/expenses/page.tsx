@@ -58,6 +58,9 @@ import {
   Eye,
   Check,
   X,
+  Sparkles,
+  AlertTriangle,
+  Brain,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -175,6 +178,16 @@ export default function ExpensesPage() {
     notes: '',
   })
 
+  // AI categorization state
+  const [aiSuggestion, setAiSuggestion] = useState<{
+    category: string;
+    confidence: number;
+    reasoning: string;
+    isAnomaly: boolean;
+    anomalyDescription: string | null;
+  } | null>(null)
+  const [categorizingAI, setCategorizingAI] = useState(false)
+
   // User permissions
   const userRole = session?.user?.role
   const canCreate = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'SALES', 'WAREHOUSE', 'FINANCE'].includes(userRole || '')
@@ -234,9 +247,52 @@ export default function ExpensesPage() {
     fetchBudgetCategories()
   }, [fetchExpenses])
 
+  // AI Auto-categorization
+  const handleAICategorize = async () => {
+    if (!formData.description || !formData.amount) return
+
+    setCategorizingAI(true)
+    setAiSuggestion(null)
+
+    try {
+      const response = await fetch('/api/expenses/categorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: formData.description,
+          amount: parseFloat(formData.amount),
+          date: formData.expenseDate,
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data) {
+          setAiSuggestion({
+            category: result.data.category,
+            confidence: result.data.confidence,
+            reasoning: result.data.reasoning,
+            isAnomaly: result.data.anomalyDetection?.isAnomaly || false,
+            anomalyDescription: result.data.anomalyDetection?.description || null,
+          })
+        }
+      }
+    } catch (error) {
+      console.error('AI categorization error:', error)
+    } finally {
+      setCategorizingAI(false)
+    }
+  }
+
+  const applyAISuggestion = () => {
+    if (aiSuggestion) {
+      setFormData(prev => ({ ...prev, category: aiSuggestion.category }))
+    }
+  }
+
   const handleCreate = async () => {
     if (!formData.description || !formData.amount) return
-    
+
     setSaving(true)
     try {
       const response = await fetch('/api/expenses', {
@@ -252,6 +308,7 @@ export default function ExpensesPage() {
       if (response.ok) {
         setShowCreateDialog(false)
         resetForm()
+        setAiSuggestion(null)
         fetchExpenses()
       }
     } catch (error) {
@@ -677,9 +734,28 @@ export default function ExpensesPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Select 
-                  value={formData.category} 
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="category">Category</Label>
+                  {!showEditDialog && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleAICategorize}
+                      disabled={categorizingAI || !formData.description || !formData.amount}
+                      className="h-6 text-xs text-purple-600 hover:text-purple-700"
+                    >
+                      {categorizingAI ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : (
+                        <Sparkles className="h-3 w-3 mr-1" />
+                      )}
+                      AI Suggest
+                    </Button>
+                  )}
+                </div>
+                <Select
+                  value={formData.category}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
                 >
                   <SelectTrigger>
@@ -693,6 +769,44 @@ export default function ExpensesPage() {
                 </Select>
               </div>
             </div>
+
+            {/* AI Suggestion Panel */}
+            {aiSuggestion && !showEditDialog && (
+              <div className={`p-3 rounded-lg border ${aiSuggestion.isAnomaly ? 'bg-yellow-50 border-yellow-200' : 'bg-purple-50 border-purple-200'}`}>
+                <div className="flex items-start gap-2">
+                  {aiSuggestion.isAnomaly ? (
+                    <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                  ) : (
+                    <Brain className="h-4 w-4 text-purple-600 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">
+                        AI suggests: <span className="text-purple-700">{aiSuggestion.category}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ({aiSuggestion.confidence}% confidence)
+                        </span>
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={applyAISuggestion}
+                        className="h-6 text-xs"
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{aiSuggestion.reasoning}</p>
+                    {aiSuggestion.isAnomaly && aiSuggestion.anomalyDescription && (
+                      <p className="text-xs text-yellow-700 mt-1 font-medium">
+                        ⚠️ {aiSuggestion.anomalyDescription}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
