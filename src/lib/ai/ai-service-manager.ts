@@ -6,6 +6,7 @@
 import { AI_CONFIG, AI_PROVIDERS, AIProviderConfig, TASK_MODELS } from './config'
 import { recordMetric, timeAsync } from '../performance'
 import { logger } from '../logger'
+import { trackAIUsage } from './usage-tracker'
 
 export interface AIRequest {
   prompt: string
@@ -358,7 +359,22 @@ async function callProvider(
 
     response.latency = Date.now() - startTime
     incrementRateLimits(provider.name)
-    
+
+    // Track usage in database
+    trackAIUsage({
+      provider: provider.name,
+      model: provider.model,
+      endpoint: request.taskType || 'general',
+      promptTokens: response.usage?.promptTokens || 0,
+      completionTokens: response.usage?.completionTokens || 0,
+      totalTokens: response.usage?.totalTokens || 0,
+      latencyMs: response.latency,
+      success: true,
+      taskType: request.taskType,
+    }).catch(() => {
+      // Don't fail the request if tracking fails
+    })
+
     logger.info('AI request completed', {
       context: {
         provider: provider.name,
@@ -367,14 +383,30 @@ async function callProvider(
         tokensUsed: response.usage?.totalTokens,
       },
     })
-    
+
     return response
   } catch (error) {
     const latency = Date.now() - startTime
-    const errorMessage = error instanceof Error 
+    const errorMessage = error instanceof Error
       ? (error.name === 'AbortError' ? `Request timeout after ${timeout}ms` : error.message)
       : 'Unknown error'
-    
+
+    // Track failed request in database
+    trackAIUsage({
+      provider: provider.name,
+      model: provider.model,
+      endpoint: request.taskType || 'general',
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      latencyMs: latency,
+      success: false,
+      errorMessage,
+      taskType: request.taskType,
+    }).catch(() => {
+      // Don't fail the request if tracking fails
+    })
+
     logger.error('AI request failed', error as Error, {
       context: {
         provider: provider.name,
@@ -382,7 +414,7 @@ async function callProvider(
         latency,
       },
     })
-    
+
     return {
       success: false,
       content: '',

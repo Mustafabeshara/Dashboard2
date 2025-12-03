@@ -55,3 +55,20 @@ export type {
   SuggestionResult,
   BudgetSuggestion,
 } from './budget-analyzer'
+
+// AI Usage Tracking
+export {
+  trackAIUsage,
+  getUsageStats,
+  getRecentUsageLogs,
+  getUsageSummary,
+  cleanupOldLogs,
+  calculateCost,
+} from './usage-tracker'
+export type {
+  AIUsageData,
+  UsageStats,
+  ProviderStats,
+  TaskTypeStats,
+  DailyUsageStats,
+} from './usage-tracker'
