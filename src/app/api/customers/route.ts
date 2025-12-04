@@ -5,23 +5,51 @@
 
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { audit } from '@/lib/audit';
+import { cache } from '@/lib/cache';
+import { requirePermission } from '@/lib/rbac';
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit';
 import { CustomerType, Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const createCustomerSchema = z.object({
+  name: z.string().min(1, 'Customer name is required').max(200),
+  type: z.enum(['GOVERNMENT', 'PRIVATE', 'CLINIC']).default('GOVERNMENT'),
+  registrationNumber: z.string().max(50).optional(),
+  taxId: z.string().max(50).optional(),
+  address: z.string().max(500).optional(),
+  city: z.string().max(100).optional(),
+  country: z.string().max(100).default('Kuwait'),
+  primaryContact: z.string().max(100).optional(),
+  email: z.string().email().max(100).optional().or(z.literal('')),
+  phone: z.string().max(50).optional(),
+  paymentTerms: z.string().max(200).optional(),
+  creditLimit: z.number().optional(),
+  departments: z.any().optional(),
+});
 
 // GET /api/customers - List all customers with filters
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Permission check
+    requirePermission(session, 'customers', 'view');
+
+    // Rate limiting
+    const rateLimitResult = await rateLimit(RateLimitPresets.standard)(request);
+    if (rateLimitResult) return rateLimitResult;
 
     const { searchParams } = new URL(request.url);
 
     // Pagination
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100);
     const skip = (page - 1) * limit;
 
     // Filters
@@ -29,6 +57,13 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const isActive = searchParams.get('isActive');
     const showDeleted = searchParams.get('showDeleted') === 'true';
+
+    // Try cache first
+    const cacheKey = `customers:list:${page}:${limit}:${type}:${search}:${isActive}:${showDeleted}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
     // Build where clause
     const where: Prisma.CustomerWhereInput = {
@@ -52,21 +87,21 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Get total count
-    const total = await prisma.customer.count({ where });
-
-    // Get customers
-    const customers = await prisma.customer.findMany({
-      where,
-      include: {
-        _count: {
-          select: { tenders: true, invoices: true },
+    // Get total count and customers in parallel
+    const [total, customers] = await Promise.all([
+      prisma.customer.count({ where }),
+      prisma.customer.findMany({
+        where,
+        include: {
+          _count: {
+            select: { tenders: true, invoices: true },
+          },
         },
-      },
-      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-      skip,
-      take: limit,
-    });
+        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+        skip,
+        take: limit,
+      }),
+    ]);
 
     // Calculate stats
     const stats = {
@@ -77,7 +112,7 @@ export async function GET(request: NextRequest) {
       totalBalance: customers.reduce((sum, c) => sum + Number(c.currentBalance || 0), 0),
     };
 
-    return NextResponse.json({
+    const response = {
       success: true,
       customers,
       stats,
@@ -87,7 +122,12 @@ export async function GET(request: NextRequest) {
         total,
         totalPages: Math.ceil(total / limit),
       },
-    });
+    };
+
+    // Cache the result
+    await cache.set(cacheKey, response, 300); // 5 minutes
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error fetching customers:', error);
     return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 });
@@ -98,40 +138,44 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Permission check
+    requirePermission(session, 'customers', 'create');
+
+    // Rate limiting
+    const rateLimitResult = await rateLimit(RateLimitPresets.strict)(request);
+    if (rateLimitResult) return rateLimitResult;
+
     const body = await request.json();
 
-    const {
-      name,
-      type = 'GOVERNMENT',
-      registrationNumber,
-      taxId,
-      address,
-      city,
-      country = 'Kuwait',
-      primaryContact,
-      email,
-      phone,
-      paymentTerms,
-      creditLimit,
-      departments,
-    } = body;
-
-    // Validate required fields
-    if (!name) {
-      return NextResponse.json({ error: 'Customer name is required' }, { status: 400 });
+    // Validate with Zod
+    const parseResult = createCustomerSchema.safeParse(body);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        {
+          error: 'Validation failed',
+          details: parseResult.error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        },
+        { status: 400 }
+      );
     }
+
+    const validatedData = parseResult.data;
 
     // Check if customer with same name already exists
     const existing = await prisma.customer.findFirst({
       where: {
         name: {
-          equals: name,
+          equals: validatedData.name,
           mode: 'insensitive',
         },
+        isDeleted: false,
       },
     });
 
@@ -145,21 +189,27 @@ export async function POST(request: NextRequest) {
     // Create customer
     const customer = await prisma.customer.create({
       data: {
-        name,
-        type,
-        registrationNumber,
-        taxId,
-        address,
-        city,
-        country,
-        primaryContact,
-        email,
-        phone,
-        paymentTerms,
-        creditLimit,
-        departments,
+        name: validatedData.name,
+        type: validatedData.type,
+        registrationNumber: validatedData.registrationNumber,
+        taxId: validatedData.taxId,
+        address: validatedData.address,
+        city: validatedData.city,
+        country: validatedData.country,
+        primaryContact: validatedData.primaryContact,
+        email: validatedData.email || undefined,
+        phone: validatedData.phone,
+        paymentTerms: validatedData.paymentTerms,
+        creditLimit: validatedData.creditLimit,
+        departments: validatedData.departments,
       },
     });
+
+    // Clear cache
+    await cache.clear('customers:');
+
+    // Audit trail
+    await audit.logCreate('Customer', customer.id, customer, session.user.id);
 
     return NextResponse.json(
       {

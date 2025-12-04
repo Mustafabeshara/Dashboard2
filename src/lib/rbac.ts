@@ -92,6 +92,7 @@ export const PERMISSIONS = {
   budgets: {
     view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'FINANCE'],
     create: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
+    edit: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
     update: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
     delete: ['ADMIN', 'CEO', 'CFO'],
     approve: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'],
@@ -99,18 +100,21 @@ export const PERMISSIONS = {
   tenders: {
     view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'SALES'],
     create: ['ADMIN', 'CEO', 'MANAGER', 'SALES'],
+    edit: ['ADMIN', 'CEO', 'MANAGER', 'SALES'],
     update: ['ADMIN', 'CEO', 'MANAGER', 'SALES'],
     delete: ['ADMIN', 'CEO'],
   },
   users: {
     view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'],
     create: ['ADMIN'],
+    edit: ['ADMIN', 'CEO'],
     update: ['ADMIN', 'CEO'],
     delete: ['ADMIN'],
   },
   inventory: {
     view: ['ADMIN', 'CEO', 'MANAGER', 'WAREHOUSE', 'SALES'],
     create: ['ADMIN', 'MANAGER', 'WAREHOUSE'],
+    edit: ['ADMIN', 'MANAGER', 'WAREHOUSE'],
     update: ['ADMIN', 'MANAGER', 'WAREHOUSE'],
     delete: ['ADMIN', 'MANAGER'],
   },
@@ -118,10 +122,46 @@ export const PERMISSIONS = {
     view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'],
     export: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
   },
+  customers: {
+    view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'SALES', 'FINANCE'],
+    create: ['ADMIN', 'CEO', 'MANAGER', 'SALES'],
+    edit: ['ADMIN', 'CEO', 'MANAGER', 'SALES'],
+    update: ['ADMIN', 'CEO', 'MANAGER', 'SALES'],
+    delete: ['ADMIN', 'CEO'],
+  },
+  suppliers: {
+    view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'WAREHOUSE', 'FINANCE'],
+    create: ['ADMIN', 'CEO', 'MANAGER', 'WAREHOUSE'],
+    edit: ['ADMIN', 'CEO', 'MANAGER', 'WAREHOUSE'],
+    update: ['ADMIN', 'CEO', 'MANAGER', 'WAREHOUSE'],
+    delete: ['ADMIN', 'CEO'],
+  },
+  expenses: {
+    view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'FINANCE'],
+    create: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'FINANCE'],
+    edit: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
+    update: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
+    delete: ['ADMIN', 'CEO', 'CFO'],
+    approve: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
+  },
+  documents: {
+    view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'SALES', 'WAREHOUSE', 'FINANCE'],
+    create: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'SALES', 'WAREHOUSE', 'FINANCE'],
+    edit: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'],
+    update: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'],
+    delete: ['ADMIN', 'CEO', 'CFO'],
+  },
+  invoices: {
+    view: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'SALES', 'FINANCE'],
+    create: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'SALES'],
+    edit: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
+    update: ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER'],
+    delete: ['ADMIN', 'CEO', 'CFO'],
+  },
 } as const
 
 export type Resource = keyof typeof PERMISSIONS
-export type Action = 'view' | 'create' | 'update' | 'delete' | 'approve' | 'export'
+export type Action = 'view' | 'create' | 'edit' | 'update' | 'delete' | 'approve' | 'export'
 
 /**
  * Check if user has permission for specific resource and action

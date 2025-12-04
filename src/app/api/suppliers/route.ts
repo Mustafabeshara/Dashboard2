@@ -8,6 +8,8 @@ import { NextResponse } from 'next/server';
 import { withAuth, AuthenticatedRequest } from '@/lib/middleware/with-auth';
 import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+import { cache } from '@/lib/cache';
+import { audit } from '@/lib/audit';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 
@@ -175,6 +177,12 @@ async function handlePost(request: AuthenticatedRequest) {
       notes: notes || undefined,
     },
   });
+
+  // Clear cache
+  await cache.clear('suppliers:');
+
+  // Audit trail
+  await audit.logCreate('Supplier', supplier.id, supplier, request.user.id);
 
   logger.info('Supplier created', {
     context: {

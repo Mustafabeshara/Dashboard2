@@ -35,9 +35,9 @@ const createBudgetSchema = z.object({
   })).optional(),
 })
 
-// Budget search params schema
+// Budget search params schema - matches BudgetStatus enum
 const budgetSearchSchema = z.object({
-  status: z.enum(['DRAFT', 'ACTIVE', 'CLOSED', 'CANCELLED', 'ALL']).optional(),
+  status: z.enum(['DRAFT', 'PENDING', 'APPROVED', 'ACTIVE', 'CLOSED', 'REJECTED', 'ALL']).optional(),
   type: z.enum(['MASTER', 'DEPARTMENT', 'PROJECT', 'TENDER', 'ALL']).optional(),
   fiscalYear: z.coerce.number().optional(),
   department: z.string().optional(),

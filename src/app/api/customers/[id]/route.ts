@@ -5,21 +5,61 @@
 
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { audit } from '@/lib/audit';
+import { cache } from '@/lib/cache';
+import { requirePermission } from '@/lib/rbac';
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const updateCustomerSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  type: z.enum(['GOVERNMENT', 'PRIVATE', 'SEMI_GOVERNMENT']).optional(),
+  registrationNumber: z.string().max(50).optional(),
+  taxId: z.string().max(50).optional(),
+  address: z.string().max(500).optional(),
+  city: z.string().max(100).optional(),
+  country: z.string().max(100).optional(),
+  primaryContact: z.string().max(100).optional(),
+  email: z.string().email().max(100).optional().or(z.literal('')),
+  phone: z.string().max(50).optional(),
+  paymentTerms: z.string().max(200).optional(),
+  creditLimit: z.number().optional(),
+  currentBalance: z.number().optional(),
+  departments: z.any().optional(),
+  isActive: z.boolean().optional(),
+});
 
 // GET /api/customers/[id] - Get customer details
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Permission check
+    requirePermission(session, 'customers', 'view');
+
+    // Rate limiting
+    const rateLimitResult = await rateLimit(RateLimitPresets.standard)(request);
+    if (rateLimitResult) return rateLimitResult;
+
     const { id } = await params;
 
-    const customer = await prisma.customer.findUnique({
-      where: { id },
+    // Try cache first
+    const cacheKey = `customer:${id}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return NextResponse.json({ success: true, data: cached });
+    }
+
+    const customer = await prisma.customer.findFirst({
+      where: { id, isDeleted: false },
       include: {
         _count: {
           select: {
@@ -63,9 +103,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    if (customer.isDeleted) {
-      return NextResponse.json({ error: 'Customer has been deleted' }, { status: 410 });
-    }
+    // Cache the result
+    await cache.set(cacheKey, customer, 300); // 5 minutes
 
     return NextResponse.json({
       success: true,
@@ -78,68 +117,89 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 }
 
 // PATCH /api/customers/[id] - Update customer
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Permission check
+    requirePermission(session, 'customers', 'edit');
+
+    // Rate limiting
+    const rateLimitResult = await rateLimit(RateLimitPresets.strict)(request);
+    if (rateLimitResult) return rateLimitResult;
 
     const { id } = await params;
     const body = await request.json();
 
-    const {
-      name,
-      type,
-      registrationNumber,
-      taxId,
-      address,
-      city,
-      country,
-      primaryContact,
-      email,
-      phone,
-      paymentTerms,
-      creditLimit,
-      currentBalance,
-      departments,
-      isActive,
-    } = body;
+    // Validate with Zod
+    const parseResult = updateCustomerSchema.safeParse(body);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        {
+          error: 'Validation failed',
+          details: parseResult.error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        },
+        { status: 400 }
+      );
+    }
+
+    const validatedData = parseResult.data;
 
     // Check if customer exists
-    const existing = await prisma.customer.findUnique({
-      where: { id },
+    const existing = await prisma.customer.findFirst({
+      where: { id, isDeleted: false },
     });
 
     if (!existing) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    if (existing.isDeleted) {
-      return NextResponse.json({ error: 'Cannot update deleted customer' }, { status: 410 });
-    }
+    // Build update data
+    const updateData: Record<string, unknown> = {};
+
+    if (validatedData.name !== undefined) updateData.name = validatedData.name;
+    if (validatedData.type !== undefined) updateData.type = validatedData.type;
+    if (validatedData.registrationNumber !== undefined)
+      updateData.registrationNumber = validatedData.registrationNumber;
+    if (validatedData.taxId !== undefined) updateData.taxId = validatedData.taxId;
+    if (validatedData.address !== undefined) updateData.address = validatedData.address;
+    if (validatedData.city !== undefined) updateData.city = validatedData.city;
+    if (validatedData.country !== undefined) updateData.country = validatedData.country;
+    if (validatedData.primaryContact !== undefined)
+      updateData.primaryContact = validatedData.primaryContact;
+    if (validatedData.email !== undefined) updateData.email = validatedData.email;
+    if (validatedData.phone !== undefined) updateData.phone = validatedData.phone;
+    if (validatedData.paymentTerms !== undefined)
+      updateData.paymentTerms = validatedData.paymentTerms;
+    if (validatedData.creditLimit !== undefined)
+      updateData.creditLimit = validatedData.creditLimit;
+    if (validatedData.currentBalance !== undefined)
+      updateData.currentBalance = validatedData.currentBalance;
+    if (validatedData.departments !== undefined)
+      updateData.departments = validatedData.departments;
+    if (validatedData.isActive !== undefined) updateData.isActive = validatedData.isActive;
 
     // Update customer
     const customer = await prisma.customer.update({
       where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(type !== undefined && { type }),
-        ...(registrationNumber !== undefined && { registrationNumber }),
-        ...(taxId !== undefined && { taxId }),
-        ...(address !== undefined && { address }),
-        ...(city !== undefined && { city }),
-        ...(country !== undefined && { country }),
-        ...(primaryContact !== undefined && { primaryContact }),
-        ...(email !== undefined && { email }),
-        ...(phone !== undefined && { phone }),
-        ...(paymentTerms !== undefined && { paymentTerms }),
-        ...(creditLimit !== undefined && { creditLimit }),
-        ...(currentBalance !== undefined && { currentBalance }),
-        ...(departments !== undefined && { departments }),
-        ...(isActive !== undefined && { isActive }),
-      },
+      data: updateData,
     });
+
+    // Clear cache
+    await cache.delete(`customer:${id}`);
+    await cache.clear('customers:');
+
+    // Audit trail
+    await audit.logUpdate('Customer', id, existing, customer, session.user.id);
 
     return NextResponse.json({
       success: true,
@@ -154,25 +214,32 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 // DELETE /api/customers/[id] - Soft delete customer
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Permission check
+    requirePermission(session, 'customers', 'delete');
+
+    // Rate limiting
+    const rateLimitResult = await rateLimit(RateLimitPresets.strict)(request);
+    if (rateLimitResult) return rateLimitResult;
 
     const { id } = await params;
 
     // Check if customer exists
-    const existing = await prisma.customer.findUnique({
-      where: { id },
+    const existing = await prisma.customer.findFirst({
+      where: { id, isDeleted: false },
       include: {
         _count: {
           select: {
-            tenders: true,
-            invoices: true,
+            tenders: { where: { isDeleted: false } },
+            invoices: { where: { isDeleted: false } },
           },
         },
       },
@@ -182,8 +249,16 @@ export async function DELETE(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    if (existing.isDeleted) {
-      return NextResponse.json({ error: 'Customer already deleted' }, { status: 410 });
+    // Check if customer has active tenders or invoices
+    if (existing._count.tenders > 0 || existing._count.invoices > 0) {
+      return NextResponse.json(
+        {
+          error: 'Cannot delete customer with active tenders or invoices',
+          tenders: existing._count.tenders,
+          invoices: existing._count.invoices,
+        },
+        { status: 400 }
+      );
     }
 
     // Soft delete
@@ -195,6 +270,12 @@ export async function DELETE(
       },
     });
 
+    // Clear cache
+    await cache.delete(`customer:${id}`);
+    await cache.clear('customers:');
+
+    // Audit trail
+    await audit.logDelete('Customer', id, existing, session.user.id);
 
     return NextResponse.json({
       success: true,

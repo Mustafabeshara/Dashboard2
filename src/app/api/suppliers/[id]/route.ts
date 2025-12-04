@@ -8,6 +8,8 @@ import { NextResponse } from 'next/server';
 import { withAuth, AuthenticatedRequest } from '@/lib/middleware/with-auth';
 import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+import { cache } from '@/lib/cache';
+import { audit } from '@/lib/audit';
 import { z } from 'zod';
 
 // Rate limiter for supplier detail endpoints
@@ -170,6 +172,13 @@ async function handlePatch(
     },
   });
 
+  // Clear cache
+  await cache.delete(`supplier:${id}`);
+  await cache.clear('suppliers:');
+
+  // Audit trail
+  await audit.logUpdate('Supplier', id, existing, supplier, request.user.id);
+
   logger.info('Supplier updated', {
     context: {
       supplierId: supplier.id,
@@ -222,6 +231,13 @@ async function handleDelete(
       isActive: false,
     },
   });
+
+  // Clear cache
+  await cache.delete(`supplier:${id}`);
+  await cache.clear('suppliers:');
+
+  // Audit trail
+  await audit.logDelete('Supplier', id, existing, request.user.id);
 
   logger.info('Supplier deleted', {
     context: {
