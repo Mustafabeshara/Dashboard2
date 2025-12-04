@@ -25,11 +25,7 @@ export class DesktopIntegrationService {
     try {
       // Add to AI processing queue
       const queueItem = await desktopAIProcessor.addToQueue(documentId, documentPath, mimeType);
-      
-      // In a real implementation, this would trigger the actual processing
-      // For now, we'll simulate the result
-      console.log(`Document ${documentId} added to processing queue`);
-      
+
       return {
         success: true,
         queueItem,

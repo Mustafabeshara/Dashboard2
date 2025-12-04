@@ -1,17 +1,7 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -19,7 +9,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -27,100 +26,98 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@/components/ui/table';
 import {
-  FileText,
-  Download,
-  Play,
-  Loader2,
-  BarChart3,
-  PieChart,
-  TrendingUp,
-  DollarSign,
-  Users,
-  Package,
-  FileSpreadsheet,
-  Calendar,
   CheckCircle,
+  DollarSign,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+  Package,
+  Play,
+  TrendingUp,
+  Users,
   XCircle,
-} from 'lucide-react'
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface ReportTemplate {
-  id: string
-  name: string
-  description: string
-  category: string
-  parameters: string[]
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  parameters: string[];
 }
 
 interface ReportData {
-  title: string
-  generatedAt: string
-  parameters: Record<string, any>
-  summary?: Record<string, any>
-  data: any[]
-  columns: { key: string; label: string }[]
+  title: string;
+  generatedAt: string;
+  parameters: Record<string, any>;
+  summary?: Record<string, any>;
+  data: any[];
+  columns: { key: string; label: string }[];
 }
 
 const categoryIcons: Record<string, React.ReactNode> = {
-  'Tenders': <FileText className="w-5 h-5" />,
-  'Budgets': <DollarSign className="w-5 h-5" />,
-  'Expenses': <TrendingUp className="w-5 h-5" />,
-  'Customers': <Users className="w-5 h-5" />,
-  'Invoices': <FileSpreadsheet className="w-5 h-5" />,
-  'Suppliers': <Package className="w-5 h-5" />,
-  'Inventory': <Package className="w-5 h-5" />,
-}
+  Tenders: <FileText className="w-5 h-5" />,
+  Budgets: <DollarSign className="w-5 h-5" />,
+  Expenses: <TrendingUp className="w-5 h-5" />,
+  Customers: <Users className="w-5 h-5" />,
+  Invoices: <FileSpreadsheet className="w-5 h-5" />,
+  Suppliers: <Package className="w-5 h-5" />,
+  Inventory: <Package className="w-5 h-5" />,
+};
 
 const categoryColors: Record<string, string> = {
-  'Tenders': 'bg-blue-100 text-blue-700',
-  'Budgets': 'bg-green-100 text-green-700',
-  'Expenses': 'bg-orange-100 text-orange-700',
-  'Customers': 'bg-purple-100 text-purple-700',
-  'Invoices': 'bg-teal-100 text-teal-700',
-  'Suppliers': 'bg-yellow-100 text-yellow-700',
-  'Inventory': 'bg-pink-100 text-pink-700',
-}
+  Tenders: 'bg-blue-100 text-blue-700',
+  Budgets: 'bg-green-100 text-green-700',
+  Expenses: 'bg-orange-100 text-orange-700',
+  Customers: 'bg-purple-100 text-purple-700',
+  Invoices: 'bg-teal-100 text-teal-700',
+  Suppliers: 'bg-yellow-100 text-yellow-700',
+  Inventory: 'bg-pink-100 text-pink-700',
+};
 
 export default function ReportsPage() {
-  const [templates, setTemplates] = useState<ReportTemplate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [generating, setGenerating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [templates, setTemplates] = useState<ReportTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   // Report generation state
-  const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null)
-  const [showParamsDialog, setShowParamsDialog] = useState(false)
-  const [reportParams, setReportParams] = useState<Record<string, any>>({})
-  const [reportData, setReportData] = useState<ReportData | null>(null)
-  const [showReportDialog, setShowReportDialog] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
+  const [showParamsDialog, setShowParamsDialog] = useState(false);
+  const [reportParams, setReportParams] = useState<Record<string, any>>({});
+  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [showReportDialog, setShowReportDialog] = useState(false);
 
   // Filter state
-  const [categoryFilter, setCategoryFilter] = useState<string>('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   const fetchTemplates = async () => {
     try {
-      setLoading(true)
-      const response = await fetch('/api/reports')
-      if (!response.ok) throw new Error('Failed to fetch report templates')
-      const data = await response.json()
-      setTemplates(data.templates)
+      setLoading(true);
+      const response = await fetch('/api/reports');
+      if (!response.ok) throw new Error('Failed to fetch report templates');
+      const data = await response.json();
+      setTemplates(data.templates);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load templates')
+      setError(err instanceof Error ? err.message : 'Failed to load templates');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchTemplates()
-  }, [])
+    fetchTemplates();
+  }, []);
 
   const handleGenerateReport = async () => {
-    if (!selectedTemplate) return
-    setGenerating(true)
-    setError(null)
+    if (!selectedTemplate) return;
+    setGenerating(true);
+    setError(null);
 
     try {
       const response = await fetch('/api/reports', {
@@ -130,83 +127,86 @@ export default function ReportsPage() {
           reportId: selectedTemplate.id,
           parameters: reportParams,
         }),
-      })
+      });
 
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to generate report')
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to generate report');
       }
 
-      const data = await response.json()
-      setReportData(data.report)
-      setShowParamsDialog(false)
-      setShowReportDialog(true)
-      setSuccess('Report generated successfully')
+      const data = await response.json();
+      setReportData(data.report);
+      setShowParamsDialog(false);
+      setShowReportDialog(true);
+      setSuccess('Report generated successfully');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate report')
+      setError(err instanceof Error ? err.message : 'Failed to generate report');
     } finally {
-      setGenerating(false)
+      setGenerating(false);
     }
-  }
+  };
 
   const openParamsDialog = (template: ReportTemplate) => {
-    setSelectedTemplate(template)
-    setReportParams({})
-    
+    setSelectedTemplate(template);
+    setReportParams({});
+
     // Set default date range if needed
     if (template.parameters.includes('dateRange')) {
-      const today = new Date()
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+      const today = new Date();
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
       setReportParams({
         startDate: firstDay.toISOString().split('T')[0],
         endDate: today.toISOString().split('T')[0],
-      })
+      });
     }
-    
-    setShowParamsDialog(true)
-  }
+
+    setShowParamsDialog(true);
+  };
 
   const exportToCSV = () => {
-    if (!reportData) return
+    if (!reportData) return;
 
-    const headers = reportData.columns.map(c => c.label).join(',')
-    const rows = reportData.data.map(row => 
-      reportData.columns.map(c => {
-        const value = row[c.key]
-        // Escape quotes and wrap in quotes if contains comma
-        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-          return `"${value.replace(/"/g, '""')}"`
-        }
-        return value ?? ''
-      }).join(',')
-    )
-    
-    const csv = [headers, ...rows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${reportData.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+    const headers = reportData.columns.map(c => c.label).join(',');
+    const rows = reportData.data.map(row =>
+      reportData.columns
+        .map(c => {
+          const value = row[c.key];
+          // Escape quotes and wrap in quotes if contains comma
+          if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value ?? '';
+        })
+        .join(',')
+    );
 
-  const filteredTemplates = categoryFilter
-    ? templates.filter(t => t.category === categoryFilter)
-    : templates
+    const csv = [headers, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${reportData.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-  const categories = [...new Set(templates.map(t => t.category))]
+  const filteredTemplates =
+    categoryFilter && categoryFilter !== 'all'
+      ? templates.filter(t => t.category === categoryFilter)
+      : templates;
+
+  const categories = [...new Set(templates.map(t => t.category))];
 
   // Clear messages after 3 seconds
   useEffect(() => {
     if (success || error) {
       const timer = setTimeout(() => {
-        setSuccess(null)
-        setError(null)
-      }, 3000)
-      return () => clearTimeout(timer)
+        setSuccess(null);
+        setError(null);
+      }, 3000);
+      return () => clearTimeout(timer);
     }
-  }, [success, error])
+  }, [success, error]);
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -239,9 +239,11 @@ export default function ReportsPage() {
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Categories</SelectItem>
+            <SelectItem value="all">All Categories</SelectItem>
             {categories.map(cat => (
-              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              <SelectItem key={cat} value={cat}>
+                {cat}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -257,14 +259,18 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTemplates.map((template) => (
+          {filteredTemplates.map(template => (
             <Card key={template.id} className="hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div className={`p-2 rounded-lg ${categoryColors[template.category] || 'bg-gray-100'}`}>
+                  <div
+                    className={`p-2 rounded-lg ${categoryColors[template.category] || 'bg-gray-100'}`}
+                  >
                     {categoryIcons[template.category] || <FileText className="w-5 h-5" />}
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${categoryColors[template.category] || 'bg-gray-100'}`}>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${categoryColors[template.category] || 'bg-gray-100'}`}
+                  >
                     {template.category}
                   </span>
                 </div>
@@ -274,7 +280,8 @@ export default function ReportsPage() {
               <CardContent>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
-                    {template.parameters.length} parameter{template.parameters.length !== 1 ? 's' : ''}
+                    {template.parameters.length} parameter
+                    {template.parameters.length !== 1 ? 's' : ''}
                   </span>
                   <Button size="sm" onClick={() => openParamsDialog(template)}>
                     <Play className="mr-2 h-4 w-4" />
@@ -296,7 +303,7 @@ export default function ReportsPage() {
               {selectedTemplate?.name} - Configure report parameters
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedTemplate && (
             <div className="space-y-4">
               {selectedTemplate.parameters.includes('dateRange') && (
@@ -306,7 +313,9 @@ export default function ReportsPage() {
                     <Input
                       type="date"
                       value={reportParams.startDate || ''}
-                      onChange={(e) => setReportParams({ ...reportParams, startDate: e.target.value })}
+                      onChange={e =>
+                        setReportParams({ ...reportParams, startDate: e.target.value })
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -314,7 +323,7 @@ export default function ReportsPage() {
                     <Input
                       type="date"
                       value={reportParams.endDate || ''}
-                      onChange={(e) => setReportParams({ ...reportParams, endDate: e.target.value })}
+                      onChange={e => setReportParams({ ...reportParams, endDate: e.target.value })}
                     />
                   </div>
                 </div>
@@ -324,14 +333,19 @@ export default function ReportsPage() {
                 <div className="space-y-2">
                   <Label>Status</Label>
                   <Select
-                    value={reportParams.status || ''}
-                    onValueChange={(value) => setReportParams({ ...reportParams, status: value })}
+                    value={reportParams.status || 'all'}
+                    onValueChange={value =>
+                      setReportParams({
+                        ...reportParams,
+                        status: value === 'all' ? undefined : value,
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="All Statuses" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Statuses</SelectItem>
+                      <SelectItem value="all">All Statuses</SelectItem>
                       <SelectItem value="DRAFT">Draft</SelectItem>
                       <SelectItem value="SUBMITTED">Submitted</SelectItem>
                       <SelectItem value="WON">Won</SelectItem>
@@ -348,14 +362,19 @@ export default function ReportsPage() {
                 <div className="space-y-2">
                   <Label>Category</Label>
                   <Select
-                    value={reportParams.category || ''}
-                    onValueChange={(value) => setReportParams({ ...reportParams, category: value })}
+                    value={reportParams.category || 'all'}
+                    onValueChange={value =>
+                      setReportParams({
+                        ...reportParams,
+                        category: value === 'all' ? undefined : value,
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Categories</SelectItem>
+                      <SelectItem value="all">All Categories</SelectItem>
                       <SelectItem value="MEDICAL_EQUIPMENT">Medical Equipment</SelectItem>
                       <SelectItem value="PHARMACEUTICALS">Pharmaceuticals</SelectItem>
                       <SelectItem value="LABORATORY">Laboratory</SelectItem>
@@ -370,14 +389,19 @@ export default function ReportsPage() {
                 <div className="space-y-2">
                   <Label>Customer Type</Label>
                   <Select
-                    value={reportParams.customerType || ''}
-                    onValueChange={(value) => setReportParams({ ...reportParams, customerType: value })}
+                    value={reportParams.customerType || 'all'}
+                    onValueChange={value =>
+                      setReportParams({
+                        ...reportParams,
+                        customerType: value === 'all' ? undefined : value,
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="All Types" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Types</SelectItem>
+                      <SelectItem value="all">All Types</SelectItem>
                       <SelectItem value="GOVERNMENT">Government</SelectItem>
                       <SelectItem value="PRIVATE">Private</SelectItem>
                     </SelectContent>
@@ -391,7 +415,9 @@ export default function ReportsPage() {
                     type="checkbox"
                     id="lowStockOnly"
                     checked={reportParams.lowStockOnly || false}
-                    onChange={(e) => setReportParams({ ...reportParams, lowStockOnly: e.target.checked })}
+                    onChange={e =>
+                      setReportParams({ ...reportParams, lowStockOnly: e.target.checked })
+                    }
                     className="h-4 w-4 rounded border-gray-300"
                   />
                   <Label htmlFor="lowStockOnly">Low Stock Items Only</Label>
@@ -404,7 +430,7 @@ export default function ReportsPage() {
                   <Input
                     type="date"
                     value={reportParams.asOfDate || new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setReportParams({ ...reportParams, asOfDate: e.target.value })}
+                    onChange={e => setReportParams({ ...reportParams, asOfDate: e.target.value })}
                   />
                 </div>
               )}
@@ -412,7 +438,9 @@ export default function ReportsPage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowParamsDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowParamsDialog(false)}>
+              Cancel
+            </Button>
             <Button onClick={handleGenerateReport} disabled={generating}>
               {generating ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -447,10 +475,7 @@ export default function ReportsPage() {
                           {key.replace(/([A-Z])/g, ' $1').trim()}
                         </CardDescription>
                         <CardTitle className="text-2xl">
-                          {typeof value === 'number' 
-                            ? value.toLocaleString()
-                            : String(value)
-                          }
+                          {typeof value === 'number' ? value.toLocaleString() : String(value)}
                         </CardTitle>
                       </CardHeader>
                     </Card>
@@ -464,7 +489,7 @@ export default function ReportsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        {reportData.columns.map((col) => (
+                        {reportData.columns.map(col => (
                           <TableHead key={col.key}>{col.label}</TableHead>
                         ))}
                       </TableRow>
@@ -472,12 +497,12 @@ export default function ReportsPage() {
                     <TableBody>
                       {reportData.data.slice(0, 50).map((row, idx) => (
                         <TableRow key={idx}>
-                          {reportData.columns.map((col) => (
+                          {reportData.columns.map(col => (
                             <TableCell key={col.key}>
-                              {typeof row[col.key] === 'number' && col.key.toLowerCase().includes('amount')
+                              {typeof row[col.key] === 'number' &&
+                              col.key.toLowerCase().includes('amount')
                                 ? `KWD ${row[col.key].toLocaleString()}`
-                                : row[col.key] ?? '-'
-                              }
+                                : (row[col.key] ?? '-')}
                             </TableCell>
                           ))}
                         </TableRow>
@@ -499,7 +524,9 @@ export default function ReportsPage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowReportDialog(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setShowReportDialog(false)}>
+              Close
+            </Button>
             {reportData && reportData.data.length > 0 && (
               <Button onClick={exportToCSV}>
                 <Download className="mr-2 h-4 w-4" />
@@ -510,5 +537,5 @@ export default function ReportsPage() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

@@ -65,9 +65,14 @@ export default function CreateExpensePage() {
 
   const fetchBudgets = async () => {
     try {
-      const response = await fetch('/api/budgets')
+      // Fetch only ACTIVE and APPROVED budgets for linking expenses
+      const response = await fetch('/api/budgets?status=ACTIVE')
       const result = await response.json()
-      if (result.budgets) {
+      // API returns result.data for paginated responses
+      if (result.data && Array.isArray(result.data)) {
+        setBudgets(result.data)
+      } else if (result.budgets) {
+        // Legacy fallback
         setBudgets(result.budgets)
       }
     } catch (error) {

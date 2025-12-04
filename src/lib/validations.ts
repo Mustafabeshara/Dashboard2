@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod'
+import { USER_ROLES } from './config/security'
 
 // ============================================================================
 // COMMON SCHEMAS
@@ -284,7 +285,7 @@ export const createUserSchema = z.object({
     .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number'),
   fullName: z.string().min(2, 'Full name must be at least 2 characters').max(200),
-  role: z.enum(['ADMIN', 'MANAGER', 'USER', 'VIEWER']),
+  role: z.enum(USER_ROLES),
   department: z.string().max(100).optional(),
   phone: z.string().max(20).optional(),
 })

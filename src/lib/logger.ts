@@ -20,7 +20,7 @@ interface LogContext {
   userAgent?: string
   path?: string
   method?: string
-  [key: string]: any
+  [key: string]: string | number | boolean | null | undefined | object
 }
 
 interface LogEntry {
@@ -36,6 +36,14 @@ interface LogEntry {
   duration?: number
 }
 
+// Meta type for log methods - allows flexible additional properties
+// Using Record<string, unknown> as base for backwards compatibility
+type LogMeta = Record<string, unknown> & {
+  context?: LogContext
+  error?: Error | unknown
+  duration?: number
+}
+
 class Logger {
   private context: LogContext = {}
 
@@ -47,7 +55,7 @@ class Logger {
     this.context = {}
   }
 
-  private log(level: LogLevel, message: string, meta?: any) {
+  private log(level: LogLevel, message: string, meta?: LogMeta) {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
@@ -56,10 +64,25 @@ class Logger {
     }
 
     if (meta?.error) {
-      entry.error = {
-        name: meta.error.name,
-        message: meta.error.message,
-        stack: meta.error.stack,
+      // Handle both Error objects and unknown error types
+      const err = meta.error
+      if (err instanceof Error) {
+        entry.error = {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        }
+      } else if (typeof err === 'object' && err !== null) {
+        entry.error = {
+          name: 'Error',
+          message: String((err as Record<string, unknown>).message || err),
+          stack: String((err as Record<string, unknown>).stack || ''),
+        }
+      } else {
+        entry.error = {
+          name: 'Error',
+          message: String(err),
+        }
       }
     }
 
@@ -93,41 +116,41 @@ class Logger {
     // }
   }
 
-  debug(message: string, meta?: any) {
+  debug(message: string, meta?: LogMeta) {
     this.log(LogLevel.DEBUG, message, meta)
   }
 
-  info(message: string, meta?: any) {
+  info(message: string, meta?: LogMeta) {
     this.log(LogLevel.INFO, message, meta)
   }
 
-  warn(message: string, meta?: any) {
+  warn(message: string, meta?: LogMeta) {
     this.log(LogLevel.WARN, message, meta)
   }
 
-  error(message: string, error?: Error, meta?: any) {
+  error(message: string, error?: Error, meta?: LogMeta) {
     this.log(LogLevel.ERROR, message, { ...meta, error })
   }
 
-  fatal(message: string, error?: Error, meta?: any) {
+  fatal(message: string, error?: Error, meta?: LogMeta) {
     this.log(LogLevel.FATAL, message, { ...meta, error })
   }
 
   // API-specific logging
-  apiRequest(request: NextRequest, meta?: any) {
+  apiRequest(request: NextRequest, meta?: LogContext) {
     this.info('API Request', {
       context: {
         method: request.method,
         path: request.nextUrl.pathname,
         query: Object.fromEntries(request.nextUrl.searchParams),
         ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
-        userAgent: request.headers.get('user-agent'),
+        userAgent: request.headers.get('user-agent') || undefined,
         ...meta,
       },
     })
   }
 
-  apiResponse(request: NextRequest, status: number, duration: number, meta?: any) {
+  apiResponse(request: NextRequest, status: number, duration: number, meta?: LogContext) {
     this.info('API Response', {
       context: {
         method: request.method,
@@ -139,7 +162,7 @@ class Logger {
     })
   }
 
-  apiError(request: NextRequest, error: Error, meta?: any) {
+  apiError(request: NextRequest, error: Error, meta?: LogContext) {
     this.error('API Error', error, {
       context: {
         method: request.method,
@@ -151,7 +174,7 @@ class Logger {
   }
 
   // Database operation logging
-  dbQuery(operation: string, table: string, duration: number, meta?: any) {
+  dbQuery(operation: string, table: string, duration: number, meta?: LogContext) {
     this.debug('Database Query', {
       context: {
         operation,
@@ -162,7 +185,7 @@ class Logger {
     })
   }
 
-  dbError(operation: string, table: string, error: Error, meta?: any) {
+  dbError(operation: string, table: string, error: Error, meta?: LogContext) {
     this.error('Database Error', error, {
       context: {
         operation,
@@ -173,7 +196,7 @@ class Logger {
   }
 
   // Authentication logging
-  authSuccess(userId: string, method: string, meta?: any) {
+  authSuccess(userId: string, method: string, meta?: LogContext) {
     this.info('Authentication Success', {
       context: {
         userId,
@@ -183,7 +206,7 @@ class Logger {
     })
   }
 
-  authFailure(email: string, reason: string, meta?: any) {
+  authFailure(email: string, reason: string, meta?: LogContext) {
     this.warn('Authentication Failure', {
       context: {
         email,
@@ -194,7 +217,7 @@ class Logger {
   }
 
   // Business logic logging
-  businessEvent(event: string, meta?: any) {
+  businessEvent(event: string, meta?: LogContext) {
     this.info(`Business Event: ${event}`, { context: meta })
   }
 }

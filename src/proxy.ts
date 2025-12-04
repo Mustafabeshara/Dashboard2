@@ -56,8 +56,23 @@ function addCorsHeaders(response: NextResponse, request: NextRequest): void {
   }
 }
 
+// Content Security Policy
+const cspHeader = `
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' 'unsafe-eval';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' blob: data: https:;
+  font-src 'self' data:;
+  object-src 'none';
+  base-uri 'self';
+  form-action 'self';
+  frame-ancestors 'none';
+  connect-src 'self' https://api.groq.com https://generativelanguage.googleapis.com https://*.railway.app wss://*.railway.app;
+  upgrade-insecure-requests;
+`.replace(/\s{2,}/g, ' ').trim()
+
 // Add security headers
-function addSecurityHeaders(response: NextResponse): void {
+function addSecurityHeaders(response: NextResponse, isApiRoute: boolean = false): void {
   response.headers.set('X-Request-ID', crypto.randomUUID())
   // Prevent clickjacking
   response.headers.set('X-Frame-Options', 'DENY')
@@ -72,6 +87,23 @@ function addSecurityHeaders(response: NextResponse): void {
     'Permissions-Policy',
     'camera=(), microphone=(), geolocation=(), interest-cohort=()'
   )
+  // DNS prefetch control
+  response.headers.set('X-DNS-Prefetch-Control', 'on')
+  // Prevent content from being loaded in Adobe products
+  response.headers.set('X-Permitted-Cross-Domain-Policies', 'none')
+
+  // Add CSP header for non-API routes
+  if (!isApiRoute) {
+    response.headers.set('Content-Security-Policy', cspHeader)
+  }
+
+  // Add HSTS header for production
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains; preload'
+    )
+  }
 }
 
 // Handle OPTIONS preflight requests for API routes
@@ -98,10 +130,13 @@ export default withAuth(
     // Create base response
     const response = NextResponse.next()
 
+    // Add security headers to all responses
+    const isApiRoute = path.startsWith('/api/')
+    addSecurityHeaders(response, isApiRoute)
+
     // Add CORS headers for API routes
-    if (path.startsWith('/api/')) {
+    if (isApiRoute) {
       addCorsHeaders(response, req)
-      addSecurityHeaders(response)
     }
 
     // Skip role checks for API routes (handled in the API itself)

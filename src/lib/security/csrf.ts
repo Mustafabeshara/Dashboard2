@@ -6,48 +6,160 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes } from 'crypto';
+import { AUTH_SECURITY } from '../config/security';
+
+interface TokenData {
+  expires: number;
+  sessionId: string;
+  useCount: number;
+  maxUses: number;
+}
 
 // Token storage (in production, use Redis or database)
-const tokenStore = new Map<string, { expires: number }>();
+class CSRFTokenStore {
+  private store = new Map<string, TokenData>();
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private isDestroyed = false;
 
-// Clean up expired tokens periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, data] of tokenStore.entries()) {
-    if (data.expires < now) {
-      tokenStore.delete(token);
+  constructor() {
+    this.startCleanup();
+  }
+
+  private startCleanup(): void {
+    if (this.isDestroyed) return;
+
+    // Clean up expired tokens every minute
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, 60000);
+
+    // Allow process to exit even if interval is running
+    if (this.cleanupInterval.unref) {
+      this.cleanupInterval.unref();
     }
   }
-}, 60000); // Every minute
+
+  private cleanup(): void {
+    const now = Date.now();
+    for (const [token, data] of this.store.entries()) {
+      if (data.expires < now) {
+        this.store.delete(token);
+      }
+    }
+  }
+
+  set(token: string, data: TokenData): void {
+    this.store.set(token, data);
+  }
+
+  get(token: string): TokenData | undefined {
+    return this.store.get(token);
+  }
+
+  delete(token: string): void {
+    this.store.delete(token);
+  }
+
+  destroy(): void {
+    this.isDestroyed = true;
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.store.clear();
+  }
+}
+
+const tokenStore = new CSRFTokenStore();
+
+// Cleanup on process exit
+if (typeof process !== 'undefined') {
+  const cleanup = () => tokenStore.destroy();
+  process.once('exit', cleanup);
+  process.once('SIGINT', cleanup);
+  process.once('SIGTERM', cleanup);
+}
 
 /**
- * Generate a CSRF token
+ * Generate a CSRF token with rotation support
  */
-export function generateCSRFToken(sessionId: string): string {
-  const random = randomBytes(32).toString('hex');
+export function generateCSRFToken(
+  sessionId: string,
+  options: { maxUses?: number; expiresInMs?: number } = {}
+): string {
+  const {
+    maxUses = 1, // Single use by default for rotation
+    expiresInMs = AUTH_SECURITY.CSRF_TOKEN_ROTATION_INTERVAL_MS,
+  } = options;
+
+  const random = randomBytes(AUTH_SECURITY.CSRF_TOKEN_LENGTH).toString('hex');
+  const timestamp = Date.now().toString();
   const token = createHash('sha256')
-    .update(`${sessionId}:${random}:${process.env.NEXTAUTH_SECRET || 'dev'}`)
+    .update(`${sessionId}:${random}:${timestamp}:${process.env.NEXTAUTH_SECRET || 'dev'}`)
     .digest('hex');
 
-  // Store token with 1-hour expiration
-  tokenStore.set(token, { expires: Date.now() + 60 * 60 * 1000 });
+  // Store token with expiration and use tracking
+  tokenStore.set(token, {
+    expires: Date.now() + expiresInMs,
+    sessionId,
+    useCount: 0,
+    maxUses,
+  });
 
   return token;
 }
 
 /**
- * Validate a CSRF token
+ * Validate and optionally consume a CSRF token
+ * Returns the new token if rotation is needed
  */
-export function validateCSRFToken(token: string): boolean {
-  const data = tokenStore.get(token);
-  if (!data) return false;
+export function validateCSRFToken(
+  token: string,
+  sessionId?: string,
+  options: { consume?: boolean; rotate?: boolean } = {}
+): { valid: boolean; newToken?: string; error?: string } {
+  const { consume = true, rotate = true } = options;
 
-  if (data.expires < Date.now()) {
-    tokenStore.delete(token);
-    return false;
+  const data = tokenStore.get(token);
+
+  if (!data) {
+    return { valid: false, error: 'Token not found' };
   }
 
-  return true;
+  // Check expiration
+  if (data.expires < Date.now()) {
+    tokenStore.delete(token);
+    return { valid: false, error: 'Token expired' };
+  }
+
+  // Check session binding if provided
+  if (sessionId && data.sessionId !== sessionId && data.sessionId !== 'anonymous') {
+    return { valid: false, error: 'Token session mismatch' };
+  }
+
+  // Check use count
+  if (data.useCount >= data.maxUses) {
+    tokenStore.delete(token);
+    return { valid: false, error: 'Token already used' };
+  }
+
+  // Consume the token
+  if (consume) {
+    data.useCount++;
+
+    // If max uses reached, delete the token
+    if (data.useCount >= data.maxUses) {
+      tokenStore.delete(token);
+    }
+  }
+
+  // Generate new token if rotation is requested
+  let newToken: string | undefined;
+  if (rotate && consume) {
+    newToken = generateCSRFToken(sessionId || data.sessionId);
+  }
+
+  return { valid: true, newToken };
 }
 
 /**
@@ -94,8 +206,13 @@ export function validateCSRFRequest(request: NextRequest): {
 
   // For API clients without browser headers, check for custom header
   const customToken = request.headers.get('x-csrf-token');
-  if (customToken && validateCSRFToken(customToken)) {
-    return { valid: true };
+  const sessionId = request.headers.get('x-session-id');
+  if (customToken) {
+    const result = validateCSRFToken(customToken, sessionId || undefined);
+    if (result.valid) {
+      return { valid: true };
+    }
+    return { valid: false, error: result.error };
   }
 
   // If no Origin or Referer (might be same-origin request from older browser)
@@ -144,7 +261,7 @@ function getAllowedOrigins(): string[] {
 }
 
 /**
- * CSRF protection middleware wrapper
+ * CSRF protection middleware wrapper with token rotation
  */
 export function withCSRFProtection(
   handler: (request: NextRequest) => Promise<NextResponse>
@@ -159,7 +276,22 @@ export function withCSRFProtection(
       );
     }
 
-    return handler(request);
+    const response = await handler(request);
+
+    // If a custom CSRF token was used, include the new rotated token in response
+    const customToken = request.headers.get('x-csrf-token');
+    if (customToken) {
+      const sessionId = request.headers.get('x-session-id');
+      const result = validateCSRFToken(customToken, sessionId || undefined, {
+        consume: false, // Already consumed in validation
+        rotate: true,
+      });
+      if (result.newToken) {
+        response.headers.set('x-csrf-token', result.newToken);
+      }
+    }
+
+    return response;
   };
 }
 
@@ -171,8 +303,16 @@ export function createCSRFTokenEndpoint() {
   return async (request: NextRequest) => {
     // In production, verify session before issuing token
     const sessionId = request.headers.get('x-session-id') || 'anonymous';
-    const token = generateCSRFToken(sessionId);
 
-    return NextResponse.json({ csrfToken: token });
+    // Allow multiple uses for non-rotating clients
+    const token = generateCSRFToken(sessionId, {
+      maxUses: 10, // Allow up to 10 uses before requiring refresh
+      expiresInMs: AUTH_SECURITY.CSRF_TOKEN_ROTATION_INTERVAL_MS,
+    });
+
+    return NextResponse.json({
+      csrfToken: token,
+      expiresIn: AUTH_SECURITY.CSRF_TOKEN_ROTATION_INTERVAL_MS,
+    });
   };
 }

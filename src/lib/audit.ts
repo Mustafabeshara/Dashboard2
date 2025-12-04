@@ -16,13 +16,31 @@ export enum AuditAction {
   LOGOUT = 'LOGOUT',
 }
 
+export interface AuditChanges {
+  before?: Record<string, unknown>
+  after?: Record<string, unknown>
+  diff?: Record<string, { from: unknown; to: unknown }>
+}
+
+export interface AuditMetadata {
+  recordCount?: number
+  [key: string]: unknown
+}
+
+// Use Prisma's inferred type for audit log records
+import type { AuditLog, User } from '@prisma/client'
+
+export type AuditLogRecord = AuditLog & {
+  user?: Pick<User, 'id' | 'fullName' | 'email'> | null
+}
+
 export interface AuditLogEntry {
   userId?: string
   action: AuditAction
   entityType: string
   entityId?: string
-  changes?: any
-  metadata?: any
+  changes?: AuditChanges
+  metadata?: AuditMetadata
   ipAddress?: string
   userAgent?: string
 }
@@ -36,8 +54,8 @@ class AuditManager {
           action: entry.action,
           entityType: entry.entityType,
           entityId: entry.entityId,
-          oldValues: entry.changes?.before || null,
-          newValues: entry.changes?.after || null,
+          oldValues: entry.changes?.before ? JSON.parse(JSON.stringify(entry.changes.before)) : undefined,
+          newValues: entry.changes?.after ? JSON.parse(JSON.stringify(entry.changes.after)) : undefined,
           ipAddress: entry.ipAddress,
           userAgent: entry.userAgent,
         },
@@ -59,9 +77,9 @@ class AuditManager {
   async logCreate(
     entityType: string,
     entityId: string,
-    data: any,
+    data: Record<string, unknown>,
     userId?: string,
-    metadata?: any
+    metadata?: AuditMetadata
   ): Promise<void> {
     await this.log({
       userId,
@@ -76,10 +94,10 @@ class AuditManager {
   async logUpdate(
     entityType: string,
     entityId: string,
-    before: any,
-    after: any,
+    before: Record<string, unknown>,
+    after: Record<string, unknown>,
     userId?: string,
-    metadata?: any
+    metadata?: AuditMetadata
   ): Promise<void> {
     // Calculate diff
     const changes = this.calculateDiff(before, after)
@@ -97,9 +115,9 @@ class AuditManager {
   async logDelete(
     entityType: string,
     entityId: string,
-    data: any,
+    data: Record<string, unknown>,
     userId?: string,
-    metadata?: any
+    metadata?: AuditMetadata
   ): Promise<void> {
     await this.log({
       userId,
@@ -115,7 +133,7 @@ class AuditManager {
     entityType: string,
     entityId: string,
     userId?: string,
-    metadata?: any
+    metadata?: AuditMetadata
   ): Promise<void> {
     await this.log({
       userId,
@@ -130,7 +148,7 @@ class AuditManager {
     entityType: string,
     count: number,
     userId?: string,
-    metadata?: any
+    metadata?: AuditMetadata
   ): Promise<void> {
     await this.log({
       userId,
@@ -144,7 +162,7 @@ class AuditManager {
     entityType: string,
     entityId: string,
     limit: number = 50
-  ): Promise<any[]> {
+  ): Promise<AuditLogRecord[]> {
     try {
       return await prisma.auditLog.findMany({
         where: {
@@ -179,7 +197,7 @@ class AuditManager {
     startDate?: Date,
     endDate?: Date,
     limit: number = 100
-  ): Promise<any[]> {
+  ): Promise<AuditLogRecord[]> {
     try {
       return await prisma.auditLog.findMany({
         where: {
@@ -202,12 +220,15 @@ class AuditManager {
     }
   }
 
-  private calculateDiff(before: any, after: any): any {
-    const diff: any = {}
-    
+  private calculateDiff(
+    before: Record<string, unknown>,
+    after: Record<string, unknown>
+  ): Record<string, { from: unknown; to: unknown }> {
+    const diff: Record<string, { from: unknown; to: unknown }> = {}
+
     // Compare all keys
     const allKeys = new Set([...Object.keys(before), ...Object.keys(after)])
-    
+
     for (const key of allKeys) {
       if (before[key] !== after[key]) {
         diff[key] = {
@@ -216,7 +237,7 @@ class AuditManager {
         }
       }
     }
-    
+
     return diff
   }
 }
@@ -225,16 +246,16 @@ class AuditManager {
 export const audit = new AuditManager()
 
 // Middleware helper for automatic audit logging
-export function withAudit(
+export function withAudit<R>(
   action: AuditAction,
   entityType: string,
-  getEntityId?: (result: any) => string
+  getEntityId?: (result: R) => string
 ) {
-  return async <T>(
-    fn: () => Promise<T>,
+  return async (
+    fn: () => Promise<R>,
     userId?: string,
-    metadata?: any
-  ): Promise<T> => {
+    metadata?: AuditMetadata
+  ): Promise<R> => {
     const result = await fn()
     
     const entityId = getEntityId ? getEntityId(result) : undefined

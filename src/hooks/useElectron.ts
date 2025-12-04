@@ -65,13 +65,12 @@ export function useElectron() {
 
       // Listen for sync requests using on
       const unsubSync = window.electronAPI.on('sync-now', () => {
-        console.log('[useElectron] Sync requested from main process');
         setSyncStatus(prev => ({ ...prev, status: 'syncing' }));
       });
 
       // Listen for settings open requests
       const unsubSettings = window.electronAPI.on('open-settings', () => {
-        console.log('[useElectron] Settings requested from main process');
+        // Handle settings open request
       });
 
       return () => {

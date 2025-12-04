@@ -5,27 +5,26 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 import {
+  Activity,
+  AlertCircle,
   Brain,
+  CheckCircle,
+  Clock,
   FileText,
+  FolderOpen,
   Image as ImageIcon,
   Play,
-  Pause,
   RotateCcw,
-  FolderOpen,
   Settings,
-  Activity,
-  CheckCircle,
   XCircle,
-  Clock,
-  AlertCircle
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
 
 interface AIQueueItem {
   id: string;
@@ -45,16 +44,16 @@ export function AIDashboard() {
     pendingCount: 0,
     processingCount: 0,
     completedCount: 0,
-    failedCount: 0
+    failedCount: 0,
   });
-  
+
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState<AIQueueItem | null>(null);
 
   // Simulate getting queue status from Electron
   useEffect(() => {
     if (!isMonitoring) return;
-    
+
     const interval = setInterval(() => {
       // In a real app, this would call electronAPI.invoke('ai:get-queue')
       // For demo, we'll simulate queue updates
@@ -66,7 +65,7 @@ export function AIDashboard() {
           mimeType: 'application/pdf',
           status: 'processing',
           createdAt: new Date(Date.now() - 5000),
-          retryCount: 0
+          retryCount: 0,
         },
         {
           id: '2',
@@ -75,7 +74,7 @@ export function AIDashboard() {
           mimeType: 'application/pdf',
           status: 'pending',
           createdAt: new Date(Date.now() - 10000),
-          retryCount: 0
+          retryCount: 0,
         },
         {
           id: '3',
@@ -84,60 +83,67 @@ export function AIDashboard() {
           mimeType: 'image/jpeg',
           status: 'completed',
           createdAt: new Date(Date.now() - 30000),
-          retryCount: 0
-        }
+          retryCount: 0,
+        },
       ];
-      
+
       const pendingCount = mockQueue.filter(item => item.status === 'pending').length;
       const processingCount = mockQueue.filter(item => item.status === 'processing').length;
       const completedCount = mockQueue.filter(item => item.status === 'completed').length;
       const failedCount = mockQueue.filter(item => item.status === 'failed').length;
-      
+
       setQueueStats({
         queue: mockQueue,
         isProcessing: processingCount > 0,
         pendingCount,
         processingCount,
         completedCount,
-        failedCount
+        failedCount,
       });
     }, 2000);
-    
+
     return () => clearInterval(interval);
   }, [isMonitoring]);
 
   const handleProcessDocuments = () => {
-    // In a real app: electronAPI.send('process-all-documents');
-    console.log('Processing all documents');
+    // TODO: electronAPI.send('process-all-documents');
   };
 
   const handleClearQueue = () => {
-    // In a real app: electronAPI.invoke('ai:clear-queue');
-    console.log('Clearing processing queue');
+    // TODO: electronAPI.invoke('ai:clear-queue');
   };
 
   const handleImportDocuments = () => {
-    // In a real app: electronAPI.invoke('fs:select-files');
-    console.log('Importing documents');
+    // TODO: electronAPI.invoke('fs:select-files');
   };
 
   const getStatusIcon = (status: AIQueueItem['status']) => {
     switch (status) {
-      case 'pending': return <Clock className="h-4 w-4 text-gray-500" />;
-      case 'processing': return <Activity className="h-4 w-4 text-blue-500 animate-pulse" />;
-      case 'completed': return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'failed': return <XCircle className="h-4 w-4 text-red-500" />;
-      default: return <AlertCircle className="h-4 w-4 text-gray-500" />;
+      case 'pending':
+        return <Clock className="h-4 w-4 text-gray-500" />;
+      case 'processing':
+        return <Activity className="h-4 w-4 text-blue-500 animate-pulse" />;
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'failed':
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <AlertCircle className="h-4 w-4 text-gray-500" />;
     }
   };
 
   const getStatusColor = (status: AIQueueItem['status']) => {
     switch (status) {
-      case 'pending': return 'bg-gray-100 text-gray-700';
-      case 'processing': return 'bg-blue-100 text-blue-700';
-      case 'completed': return 'bg-green-100 text-green-700';
-      case 'failed': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'pending':
+        return 'bg-gray-100 text-gray-700';
+      case 'processing':
+        return 'bg-blue-100 text-blue-700';
+      case 'completed':
+        return 'bg-green-100 text-green-700';
+      case 'failed':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
     }
   };
 
@@ -148,7 +154,11 @@ export function AIDashboard() {
     return <FileText className="h-4 w-4 text-gray-500" />;
   };
 
-  const totalItems = queueStats.pendingCount + queueStats.processingCount + queueStats.completedCount + queueStats.failedCount;
+  const totalItems =
+    queueStats.pendingCount +
+    queueStats.processingCount +
+    queueStats.completedCount +
+    queueStats.failedCount;
   const progress = totalItems > 0 ? Math.round((queueStats.completedCount / totalItems) * 100) : 0;
 
   return (
@@ -195,7 +205,7 @@ export function AIDashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -209,7 +219,7 @@ export function AIDashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -223,7 +233,7 @@ export function AIDashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -237,7 +247,7 @@ export function AIDashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -258,9 +268,7 @@ export function AIDashboard() {
         <CardHeader>
           <CardTitle>Processing Progress</CardTitle>
           <CardDescription>
-            {queueStats.isProcessing 
-              ? 'AI extraction in progress...' 
-              : 'No active processing'}
+            {queueStats.isProcessing ? 'AI extraction in progress...' : 'No active processing'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -280,20 +288,14 @@ export function AIDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Processing Queue</CardTitle>
-              <CardDescription>
-                Documents waiting for or undergoing AI extraction
-              </CardDescription>
+              <CardDescription>Documents waiting for or undergoing AI extraction</CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant={queueStats.isProcessing ? "default" : "secondary"}>
-                {queueStats.isProcessing ? "Processing" : "Idle"}
+              <Badge variant={queueStats.isProcessing ? 'default' : 'secondary'}>
+                {queueStats.isProcessing ? 'Processing' : 'Idle'}
               </Badge>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setIsMonitoring(!isMonitoring)}
-              >
-                {isMonitoring ? "Pause" : "Resume"} Monitoring
+              <Button variant="ghost" size="sm" onClick={() => setIsMonitoring(!isMonitoring)}>
+                {isMonitoring ? 'Pause' : 'Resume'} Monitoring
               </Button>
             </div>
           </div>
@@ -307,12 +309,12 @@ export function AIDashboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {queueStats.queue.map((item) => (
-                <div 
+              {queueStats.queue.map(item => (
+                <div
                   key={item.id}
                   className={cn(
-                    "flex items-center justify-between p-3 rounded-lg border",
-                    selectedDocument?.id === item.id ? "bg-blue-50 border-blue-200" : "bg-white"
+                    'flex items-center justify-between p-3 rounded-lg border',
+                    selectedDocument?.id === item.id ? 'bg-blue-50 border-blue-200' : 'bg-white'
                   )}
                   onClick={() => setSelectedDocument(item)}
                 >
@@ -323,7 +325,7 @@ export function AIDashboard() {
                       <p className="text-sm text-gray-500 truncate">{item.documentPath}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
                       {getStatusIcon(item.status)}
@@ -332,9 +334,7 @@ export function AIDashboard() {
                       </Badge>
                     </div>
                     {item.retryCount > 0 && (
-                      <Badge variant="secondary">
-                        Retry {item.retryCount}
-                      </Badge>
+                      <Badge variant="secondary">Retry {item.retryCount}</Badge>
                     )}
                   </div>
                 </div>
@@ -350,10 +350,11 @@ export function AIDashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Document Details</CardTitle>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => setSelectedDocument(null)}
+                aria-label="Close document details"
               >
                 Close
               </Button>
@@ -366,7 +367,9 @@ export function AIDashboard() {
                 <div className="space-y-2 text-sm">
                   <div>
                     <span className="text-gray-500">Name:</span>
-                    <span className="ml-2 font-medium">{selectedDocument.documentPath.split('/').pop()}</span>
+                    <span className="ml-2 font-medium">
+                      {selectedDocument.documentPath.split('/').pop()}
+                    </span>
                   </div>
                   <div>
                     <span className="text-gray-500">Path:</span>
@@ -380,13 +383,14 @@ export function AIDashboard() {
                     <span className="text-gray-500">Status:</span>
                     <span className="ml-2">
                       <Badge className={getStatusColor(selectedDocument.status)}>
-                        {selectedDocument.status.charAt(0).toUpperCase() + selectedDocument.status.slice(1)}
+                        {selectedDocument.status.charAt(0).toUpperCase() +
+                          selectedDocument.status.slice(1)}
                       </Badge>
                     </span>
                   </div>
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="font-medium mb-2">Processing Information</h4>
                 <div className="space-y-2 text-sm">

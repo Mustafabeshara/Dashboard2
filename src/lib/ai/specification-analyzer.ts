@@ -7,6 +7,7 @@
  */
 
 import { invokeUnifiedLLM, LLMProvider, Message } from './llm-provider'
+import { sanitizePromptInput, createSafePrompt, validateAIResponse } from './prompt-sanitizer'
 
 // Types for specification analysis
 export interface ProductSpecification {
@@ -166,12 +167,14 @@ export async function analyzeSpecifications(params: {
   } = params
 
   try {
-    const prompt = SPECIFICATION_ANALYSIS_PROMPT
-      .replace('{specifications}', specifications)
-      .replace('{organization}', organization)
-      .replace('{country}', country)
-      .replace('{tenderType}', tenderType)
-      .replace('{estimatedValue}', estimatedValue)
+    // Sanitize all user inputs to prevent prompt injection
+    const prompt = createSafePrompt(SPECIFICATION_ANALYSIS_PROMPT, {
+      specifications: sanitizePromptInput(specifications, { maxLength: 30000 }),
+      organization: sanitizePromptInput(organization, { maxLength: 200 }),
+      country: sanitizePromptInput(country, { maxLength: 100 }),
+      tenderType: sanitizePromptInput(tenderType, { maxLength: 100 }),
+      estimatedValue: sanitizePromptInput(estimatedValue, { maxLength: 100 }),
+    })
 
     const messages: Message[] = [
       {
@@ -197,6 +200,12 @@ export async function analyzeSpecifications(params: {
       throw new Error('No response from AI')
     }
 
+    // Validate AI response for potential data leaks
+    const responseValidation = validateAIResponse(content)
+    if (!responseValidation.valid) {
+      console.warn('AI response validation issues:', responseValidation.issues)
+    }
+
     // Parse JSON response
     const analysis = JSON.parse(content)
 
@@ -211,7 +220,8 @@ export async function analyzeSpecifications(params: {
       confidenceScore: analysis.confidenceScore || 0.7,
     }
   } catch (error) {
-    console.error('Specification analysis failed:', error)
+    // Don't log potentially sensitive data
+    console.error('Specification analysis failed:', error instanceof Error ? error.message : 'Unknown error')
     return {
       success: false,
       specifications: [],
@@ -238,16 +248,20 @@ export async function findManufacturers(params: {
   const { productName, category, specifications = {}, certifications = [] } = params
 
   const specText = Object.entries(specifications)
-    .map(([k, v]) => `${k}: ${v}`)
+    .map(([k, v]) => `${sanitizePromptInput(k, { maxLength: 100 })}: ${sanitizePromptInput(v, { maxLength: 500 })}`)
     .join('\n')
+
+  const sanitizedProductName = sanitizePromptInput(productName, { maxLength: 200 })
+  const sanitizedCategory = sanitizePromptInput(category, { maxLength: 100 })
+  const sanitizedCertifications = certifications.map(c => sanitizePromptInput(c, { maxLength: 50 }))
 
   const prompt = `Find manufacturers for the following medical product:
 
-Product: ${productName}
-Category: ${category}
+Product: ${sanitizedProductName}
+Category: ${sanitizedCategory}
 Specifications:
 ${specText || 'Not specified'}
-Required Certifications: ${certifications.join(', ') || 'Standard medical certifications'}
+Required Certifications: ${sanitizedCertifications.join(', ') || 'Standard medical certifications'}
 
 List all known manufacturers (global and regional) that produce this product or similar alternatives.
 Include estimated pricing if known.
@@ -316,16 +330,21 @@ export async function identifyCompetitors(params: {
 }): Promise<{ success: boolean; competitors: CompetitorInfo[]; error?: string }> {
   const { tenderTitle, organization, country, products, estimatedValue } = params
 
+  const sanitizedTitle = sanitizePromptInput(tenderTitle, { maxLength: 300 })
+  const sanitizedOrg = sanitizePromptInput(organization, { maxLength: 200 })
+  const sanitizedCountry = sanitizePromptInput(country, { maxLength: 100 })
+  const sanitizedProducts = products.map(p => sanitizePromptInput(p, { maxLength: 200 }))
+
   const prompt = `Identify likely competitors who might bid on this tender:
 
-Tender: ${tenderTitle}
-Organization: ${organization}
-Country: ${country}
-Products Required: ${products.join(', ')}
+Tender: ${sanitizedTitle}
+Organization: ${sanitizedOrg}
+Country: ${sanitizedCountry}
+Products Required: ${sanitizedProducts.join(', ')}
 Estimated Value: ${estimatedValue ? `$${estimatedValue.toLocaleString()}` : 'Not specified'}
 
-List companies (distributors, agents, importers) likely to compete for this tender in the ${country} market.
-Focus on companies with established presence in ${country} and the GCC region.
+List companies (distributors, agents, importers) likely to compete for this tender in the ${sanitizedCountry} market.
+Focus on companies with established presence in ${sanitizedCountry} and the GCC region.
 
 Respond with JSON:
 {
@@ -388,9 +407,12 @@ Respond with JSON:
 export async function extractSpecificationsFromText(
   documentText: string
 ): Promise<{ success: boolean; specifications: ProductSpecification[]; error?: string }> {
+  // Sanitize document text to prevent prompt injection
+  const sanitizedText = sanitizePromptInput(documentText, { maxLength: 15000 })
+
   const prompt = `Extract all product specifications from this tender document:
 
-${documentText.slice(0, 15000)}
+${sanitizedText}
 
 Identify each product/item and extract:
 - Product name

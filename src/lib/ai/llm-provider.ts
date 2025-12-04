@@ -68,7 +68,6 @@ async function withRetry<T>(
       // If this isn't the last attempt, wait before retrying
       if (attempt < maxRetries - 1) {
         const delayMs = baseDelayMs * Math.pow(2, attempt); // Exponential backoff: 1s, 2s, 4s
-        console.log(`[LLM] Attempt ${attempt + 1} failed, retrying in ${delayMs}ms...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
@@ -478,10 +477,13 @@ async function invokeGoogleGemini(params: InvokeParams, apiKey: string): Promise
   }
 
   const response = await fetchWithTimeout(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify(payload),
     },
     DEFAULT_TIMEOUT_MS
@@ -525,12 +527,10 @@ export async function invokeGemini(params: InvokeParams): Promise<InvokeResult> 
 
   // If using Google's native API
   if (config.useGoogleApi) {
-    console.log('[LLM] Using Google Gemini API directly');
     return invokeGoogleGemini(params, config.apiKey);
   }
 
   // Otherwise use Forge/OpenAI compatible API
-  console.log('[LLM] Using Forge API for Gemini');
   const { apiKey, apiUrl } = config;
 
   const {
@@ -669,31 +669,39 @@ export interface LLMConfig {
 
 /**
  * Get recommended provider for a specific task - now async
+ * Priority: Groq first (faster), fallback to Gemini
  */
 export async function getRecommendedProvider(
   taskType: 'pdf' | 'image' | 'text'
 ): Promise<LLMProvider> {
+  // Check if Groq is configured first (preferred for speed)
+  const groqConfigured = await isGroqConfigured();
+
   switch (taskType) {
     case 'pdf':
-      // Gemini has better PDF support with file_url
-      return LLMProvider.GEMINI;
+      // PDFs require Gemini's native file_url support unless we extract text first
+      // If Groq is configured, we'll use text extraction + Groq for better speed
+      return groqConfigured ? LLMProvider.GROQ : LLMProvider.GEMINI;
     case 'image':
     case 'text':
-      // Groq is faster for images and text
-      return (await isGroqConfigured()) ? LLMProvider.GROQ : LLMProvider.GEMINI;
+      // Groq is faster for text processing
+      return groqConfigured ? LLMProvider.GROQ : LLMProvider.GEMINI;
     default:
-      return LLMProvider.GEMINI;
+      return groqConfigured ? LLMProvider.GROQ : LLMProvider.GEMINI;
   }
 }
 
 /**
  * Unified LLM invocation with automatic fallback and retry logic
+ * Priority: Groq first (faster), fallback to Gemini
  */
 export async function invokeUnifiedLLM(
   params: InvokeParams,
   config?: LLMConfig
 ): Promise<InvokeResult> {
-  const effectiveConfig = config || { provider: LLMProvider.GEMINI };
+  // Default to Groq if configured, otherwise Gemini
+  const defaultProvider = (await isGroqConfigured()) ? LLMProvider.GROQ : LLMProvider.GEMINI;
+  const effectiveConfig = config || { provider: defaultProvider };
   const provider = effectiveConfig.provider;
 
   // Wrap the invocation with retry logic
@@ -716,7 +724,6 @@ export async function invokeUnifiedLLM(
 
       // If Groq fails, try Gemini as fallback (no retry needed for fallback)
       if (provider === LLMProvider.GROQ) {
-        console.log('Falling back to Gemini after Groq failure');
         return await invokeGemini(params);
       }
 

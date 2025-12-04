@@ -97,28 +97,28 @@ export default function DesktopDashboard() {
       title: "Process Documents",
       description: "Start AI extraction for pending documents",
       icon: Zap,
-      action: () => console.log("Process documents")
+      action: () => { /* TODO: Navigate to document processing */ }
     },
     {
       id: 2,
       title: "Import Documents",
       description: "Add new documents to process",
       icon: FileText,
-      action: () => console.log("Import documents")
+      action: () => { /* TODO: Navigate to document import */ }
     },
     {
       id: 3,
       title: "Review Extractions",
       description: "Check and approve pending extractions",
       icon: CheckCircle,
-      action: () => console.log("Review extractions")
+      action: () => { /* TODO: Navigate to extraction review */ }
     },
     {
       id: 4,
       title: "View Reports",
       description: "Analyze processing performance",
       icon: TrendingUp,
-      action: () => console.log("View reports")
+      action: () => { /* TODO: Navigate to reports */ }
     }
   ];
 

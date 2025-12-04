@@ -377,6 +377,7 @@ export default function DocumentsPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 placeholder="Search documents by name or tags..."
+                aria-label="Search documents"
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -561,7 +562,7 @@ export default function DocumentsPage() {
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon" aria-label="Document actions">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>

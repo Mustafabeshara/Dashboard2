@@ -1,16 +1,12 @@
 /**
  * Inventory Management Page with AI-Powered Predictions
  */
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { ExportButtons } from '@/components/ExportButtons';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -18,14 +14,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -33,78 +38,71 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@/components/ui/table';
+import { format } from 'date-fns';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  Package,
-  Plus,
-  Search,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  Loader2,
   AlertTriangle,
-  TrendingUp,
-  TrendingDown,
+  BarChart3,
+  Box,
+  Brain,
+  CheckCircle,
   Clock,
   DollarSign,
-  Brain,
+  Edit,
+  Loader2,
+  MoreHorizontal,
+  Package,
+  Plus,
   RefreshCw,
+  Search,
   Sparkles,
-  BarChart3,
-  Download,
-  Upload,
-  CheckCircle,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
   XCircle,
-  Box,
-} from 'lucide-react'
-import { format } from 'date-fns'
+} from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface InventoryItem {
-  id: string
-  productId: string
-  batchNumber: string | null
-  serialNumber: string | null
-  quantity: number
-  availableQuantity: number
-  reservedQuantity: number
-  location: string | null
-  expiryDate: string | null
-  receivedDate: string | null
-  unitCost: number | null
-  totalValue: number | null
-  status: 'AVAILABLE' | 'RESERVED' | 'EXPIRED' | 'DAMAGED'
+  id: string;
+  productId: string;
+  batchNumber: string | null;
+  serialNumber: string | null;
+  quantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
+  location: string | null;
+  expiryDate: string | null;
+  receivedDate: string | null;
+  unitCost: number | null;
+  totalValue: number | null;
+  status: 'AVAILABLE' | 'RESERVED' | 'EXPIRED' | 'DAMAGED';
   product: {
-    id: string
-    name: string
-    sku: string
-    category: string | null
-    minStockLevel: number
-    maxStockLevel: number | null
-    reorderPoint: number | null
-  }
+    id: string;
+    name: string;
+    sku: string;
+    category: string | null;
+    minStockLevel: number;
+    maxStockLevel: number | null;
+    reorderPoint: number | null;
+  };
 }
 
 interface Stats {
-  totalItems: number
-  totalValue: number
-  lowStock: number
-  expiringSoon: number
-  categories: { category: string; count: number }[]
+  totalItems: number;
+  totalValue: number;
+  lowStock: number;
+  expiringSoon: number;
+  categories: { category: string; count: number }[];
 }
 
 interface AIInsight {
-  type: 'warning' | 'success' | 'info' | 'prediction'
-  title: string
-  description: string
-  action?: string
-  data?: any
+  type: 'warning' | 'success' | 'info' | 'prediction';
+  title: string;
+  description: string;
+  action?: string;
+  data?: any;
 }
 
 const LOCATIONS = [
@@ -114,7 +112,7 @@ const LOCATIONS = [
   'Warehouse B - Shelf 2',
   'Cold Storage',
   'Quarantine Area',
-]
+];
 
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { class: string; icon: React.ReactNode }> = {
@@ -122,21 +120,29 @@ function StatusBadge({ status }: { status: string }) {
     RESERVED: { class: 'bg-yellow-100 text-yellow-700', icon: <Clock className="h-3 w-3" /> },
     EXPIRED: { class: 'bg-red-100 text-red-700', icon: <XCircle className="h-3 w-3" /> },
     DAMAGED: { class: 'bg-gray-100 text-gray-700', icon: <AlertTriangle className="h-3 w-3" /> },
-  }
+  };
 
-  const { class: className, icon } = config[status] || config.AVAILABLE
+  const { class: className, icon } = config[status] || config.AVAILABLE;
   return (
     <Badge variant="outline" className={`${className} flex items-center gap-1`}>
       {icon}
       {status}
     </Badge>
-  )
+  );
 }
 
-function StockLevelIndicator({ current, min, max }: { current: number; min: number; max: number | null }) {
-  const percentage = max ? (current / max) * 100 : current > min ? 100 : (current / min) * 100
-  const isLow = current <= min
-  const isCritical = current < min * 0.5
+function StockLevelIndicator({
+  current,
+  min,
+  max,
+}: {
+  current: number;
+  min: number;
+  max: number | null;
+}) {
+  const percentage = max ? (current / max) * 100 : current > min ? 100 : (current / min) * 100;
+  const isLow = current <= min;
+  const isCritical = current < min * 0.5;
 
   return (
     <div className="flex items-center gap-2">
@@ -148,27 +154,29 @@ function StockLevelIndicator({ current, min, max }: { current: number; min: numb
           style={{ width: `${Math.min(percentage, 100)}%` }}
         />
       </div>
-      <span className={`text-xs ${isCritical ? 'text-red-600' : isLow ? 'text-yellow-600' : 'text-gray-600'}`}>
+      <span
+        className={`text-xs ${isCritical ? 'text-red-600' : isLow ? 'text-yellow-600' : 'text-gray-600'}`}
+      >
         {current} / {max || min}
       </span>
     </div>
-  )
+  );
 }
 
 export default function InventoryPage() {
-  const { data: session } = useSession()
-  const [inventory, setInventory] = useState<InventoryItem[]>([])
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [categoryFilter, setCategoryFilter] = useState('all')
-  const [showAddDialog, setShowAddDialog] = useState(false)
-  const [showAdjustDialog, setShowAdjustDialog] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [aiInsights, setAiInsights] = useState<AIInsight[]>([])
-  const [loadingAI, setLoadingAI] = useState(false)
+  const { data: session } = useSession();
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showAdjustDialog, setShowAdjustDialog] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [aiInsights, setAiInsights] = useState<AIInsight[]>([]);
+  const [loadingAI, setLoadingAI] = useState(false);
 
   const [formData, setFormData] = useState({
     productId: '',
@@ -178,78 +186,83 @@ export default function InventoryPage() {
     location: '',
     expiryDate: '',
     unitCost: '',
-  })
+  });
 
   const [adjustData, setAdjustData] = useState({
     adjustment: '',
     reason: 'STOCK_COUNT',
-  })
+  });
 
   // User permissions
-  const userRole = session?.user?.role
-  const canCreate = ['ADMIN', 'MANAGER', 'WAREHOUSE'].includes(userRole || '')
-  const canEdit = ['ADMIN', 'MANAGER', 'WAREHOUSE'].includes(userRole || '')
-  const canDelete = ['ADMIN', 'MANAGER'].includes(userRole || '')
+  const userRole = session?.user?.role;
+  const canCreate = ['ADMIN', 'MANAGER', 'WAREHOUSE'].includes(userRole || '');
+  const canEdit = ['ADMIN', 'MANAGER', 'WAREHOUSE'].includes(userRole || '');
+  const canDelete = ['ADMIN', 'MANAGER'].includes(userRole || '');
 
   const fetchInventory = useCallback(async () => {
     try {
-      setLoading(true)
-      const params = new URLSearchParams()
-      if (search) params.append('search', search)
-      if (statusFilter !== 'all') params.append('status', statusFilter)
-      if (categoryFilter !== 'all') params.append('category', categoryFilter)
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (categoryFilter !== 'all') params.append('category', categoryFilter);
 
-      const response = await fetch(`/api/inventory?${params}`)
-      const result = await response.json()
+      const response = await fetch(`/api/inventory?${params}`);
+      const result = await response.json();
 
       if (result.inventory) {
-        setInventory(result.inventory)
+        setInventory(result.inventory);
       }
       if (result.stats) {
-        setStats(result.stats)
+        setStats(result.stats);
       }
     } catch (error) {
-      console.error('Error fetching inventory:', error)
+      console.error('Error fetching inventory:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [search, statusFilter, categoryFilter])
+  }, [search, statusFilter, categoryFilter]);
 
   const generateAIInsights = useCallback(async () => {
-    setLoadingAI(true)
+    setLoadingAI(true);
 
     try {
       // Call the AI optimization API
       const response = await fetch('/api/inventory/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-      })
+      });
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (result.success && result.data) {
-        const optimization = result.data
-        const insights: AIInsight[] = []
+        const optimization = result.data;
+        const insights: AIInsight[] = [];
 
         // Convert AI optimization results to insights
         if (optimization.insights && optimization.insights.length > 0) {
           optimization.insights.forEach((insight: any) => {
             insights.push({
-              type: insight.type === 'risk' ? 'warning' :
-                    insight.type === 'opportunity' ? 'info' :
-                    insight.type === 'trend' ? 'prediction' : 'info',
+              type:
+                insight.type === 'risk'
+                  ? 'warning'
+                  : insight.type === 'opportunity'
+                    ? 'info'
+                    : insight.type === 'trend'
+                      ? 'prediction'
+                      : 'info',
               title: insight.title,
               description: insight.description,
               action: insight.actionable ? 'Take Action' : undefined,
-            })
-          })
+            });
+          });
         }
 
         // Add reorder recommendations as insights
         if (optimization.reorderRecommendations && optimization.reorderRecommendations.length > 0) {
           const criticalCount = optimization.reorderRecommendations.filter(
             (r: any) => r.urgency === 'critical' || r.urgency === 'high'
-          ).length
+          ).length;
 
           if (criticalCount > 0) {
             insights.push({
@@ -258,7 +271,7 @@ export default function InventoryPage() {
               description: `${criticalCount} items need immediate reordering. Total ${optimization.reorderRecommendations.length} items below reorder point.`,
               action: 'Generate Purchase Order',
               data: { reorderItems: optimization.reorderRecommendations },
-            })
+            });
           }
         }
 
@@ -269,7 +282,7 @@ export default function InventoryPage() {
             title: 'AI Demand Forecast',
             description: `Predicted demand: ${optimization.demandForecast.nextMonth.toLocaleString()} units (30 days), ${optimization.demandForecast.next3Months.toLocaleString()} units (90 days). Trend: ${optimization.demandForecast.trend}. Confidence: ${optimization.demandForecast.confidence}%`,
             data: optimization.demandForecast,
-          })
+          });
         }
 
         // Add expiring items insight
@@ -283,19 +296,23 @@ export default function InventoryPage() {
               .join(', '),
             action: 'View Expiring Items',
             data: { expiringItems: optimization.stockOptimization.expiringItems },
-          })
+          });
         }
 
         // Add inventory health metric
         if (optimization.metrics) {
-          const healthStatus = optimization.metrics.inventoryHealth >= 80 ? 'success' :
-                              optimization.metrics.inventoryHealth >= 60 ? 'info' : 'warning'
+          const healthStatus =
+            optimization.metrics.inventoryHealth >= 80
+              ? 'success'
+              : optimization.metrics.inventoryHealth >= 60
+                ? 'info'
+                : 'warning';
           insights.push({
             type: healthStatus as any,
             title: `Inventory Health: ${optimization.metrics.inventoryHealth}%`,
             description: `Turnover rate: ${optimization.metrics.turnoverRate.toFixed(1)}x, Stockout risk: ${optimization.metrics.stockoutRisk.toFixed(0)}%, Potential savings: KWD ${optimization.metrics.potentialSavings.toLocaleString()}`,
             data: optimization.metrics,
-          })
+          });
         }
 
         if (insights.length === 0) {
@@ -303,47 +320,50 @@ export default function InventoryPage() {
             type: 'success',
             title: 'Inventory Health: Excellent',
             description: 'All stock levels are optimal. No immediate actions required.',
-          })
+          });
         }
 
-        setAiInsights(insights)
+        setAiInsights(insights);
       } else {
         // Fallback to basic local analysis if API fails
-        generateLocalInsights()
+        generateLocalInsights();
       }
     } catch (error) {
-      console.error('AI optimization error:', error)
+      console.error('AI optimization error:', error);
       // Fallback to basic local analysis
-      generateLocalInsights()
+      generateLocalInsights();
     } finally {
-      setLoadingAI(false)
+      setLoadingAI(false);
     }
-  }, [inventory])
+  }, [inventory]);
 
   const generateLocalInsights = useCallback(() => {
-    const insights: AIInsight[] = []
+    const insights: AIInsight[] = [];
 
     // Low stock analysis (fallback)
-    const lowStockItems = inventory.filter(item =>
-      item.availableQuantity <= (item.product.minStockLevel || 10)
-    )
+    const lowStockItems = inventory.filter(
+      item => item.availableQuantity <= (item.product.minStockLevel || 10)
+    );
 
     if (lowStockItems.length > 0) {
       insights.push({
         type: 'warning',
         title: `${lowStockItems.length} Items Low on Stock`,
-        description: `Critical items: ${lowStockItems.slice(0, 3).map(i => i.product.name).join(', ')}${lowStockItems.length > 3 ? ` and ${lowStockItems.length - 3} more` : ''}`,
+        description: `Critical items: ${lowStockItems
+          .slice(0, 3)
+          .map(i => i.product.name)
+          .join(', ')}${lowStockItems.length > 3 ? ` and ${lowStockItems.length - 3} more` : ''}`,
         action: 'Generate Purchase Order',
-      })
+      });
     }
 
     // Expiring items analysis (fallback)
-    const thirtyDaysFromNow = new Date()
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-    const expiringItems = inventory.filter(item =>
-      item.expiryDate && new Date(item.expiryDate) <= thirtyDaysFromNow
-    )
+    const expiringItems = inventory.filter(
+      item => item.expiryDate && new Date(item.expiryDate) <= thirtyDaysFromNow
+    );
 
     if (expiringItems.length > 0) {
       insights.push({
@@ -351,7 +371,7 @@ export default function InventoryPage() {
         title: `${expiringItems.length} Items Expiring Soon`,
         description: `Items expiring within 30 days need attention.`,
         action: 'View Expiring Items',
-      })
+      });
     }
 
     if (insights.length === 0) {
@@ -359,26 +379,26 @@ export default function InventoryPage() {
         type: 'success',
         title: 'Inventory Health: Good',
         description: 'Basic analysis complete. Enable AI for detailed insights.',
-      })
+      });
     }
 
-    setAiInsights(insights)
-  }, [inventory])
+    setAiInsights(insights);
+  }, [inventory]);
 
   useEffect(() => {
-    fetchInventory()
-  }, [fetchInventory])
+    fetchInventory();
+  }, [fetchInventory]);
 
   useEffect(() => {
     if (inventory.length > 0) {
-      generateAIInsights()
+      generateAIInsights();
     }
-  }, [inventory, generateAIInsights])
+  }, [inventory, generateAIInsights]);
 
   const handleAddStock = async () => {
-    if (!formData.productId || !formData.quantity) return
-    
-    setSaving(true)
+    if (!formData.productId || !formData.quantity) return;
+
+    setSaving(true);
     try {
       const response = await fetch('/api/inventory', {
         method: 'POST',
@@ -388,24 +408,32 @@ export default function InventoryPage() {
           quantity: parseInt(formData.quantity),
           unitCost: formData.unitCost ? parseFloat(formData.unitCost) : null,
         }),
-      })
+      });
 
       if (response.ok) {
-        setShowAddDialog(false)
-        setFormData({ productId: '', quantity: '', batchNumber: '', serialNumber: '', location: '', expiryDate: '', unitCost: '' })
-        fetchInventory()
+        setShowAddDialog(false);
+        setFormData({
+          productId: '',
+          quantity: '',
+          batchNumber: '',
+          serialNumber: '',
+          location: '',
+          expiryDate: '',
+          unitCost: '',
+        });
+        fetchInventory();
       }
     } catch (error) {
-      console.error('Error adding stock:', error)
+      console.error('Error adding stock:', error);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleAdjustStock = async () => {
-    if (!selectedItem || !adjustData.adjustment) return
-    
-    setSaving(true)
+    if (!selectedItem || !adjustData.adjustment) return;
+
+    setSaving(true);
     try {
       const response = await fetch(`/api/inventory/${selectedItem.id}/adjust`, {
         method: 'POST',
@@ -414,42 +442,70 @@ export default function InventoryPage() {
           adjustment: parseInt(adjustData.adjustment),
           reason: adjustData.reason,
         }),
-      })
+      });
 
       if (response.ok) {
-        setShowAdjustDialog(false)
-        setSelectedItem(null)
-        setAdjustData({ adjustment: '', reason: 'STOCK_COUNT' })
-        fetchInventory()
+        setShowAdjustDialog(false);
+        setSelectedItem(null);
+        setAdjustData({ adjustment: '', reason: 'STOCK_COUNT' });
+        fetchInventory();
       }
     } catch (error) {
-      console.error('Error adjusting stock:', error)
+      console.error('Error adjusting stock:', error);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
-  const exportToCSV = () => {
-    const headers = ['SKU', 'Product', 'Category', 'Available', 'Reserved', 'Location', 'Status', 'Value']
-    const rows = inventory.map(item => [
-      item.product.sku,
-      item.product.name,
-      item.product.category || '-',
-      item.availableQuantity,
-      item.reservedQuantity,
-      item.location || '-',
-      item.status,
-      item.totalValue || 0,
-    ])
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `inventory-${format(new Date(), 'yyyy-MM-dd')}.csv`
-    a.click()
-  }
+  // Export configuration for inventory
+  const exportConfig = {
+    filename: 'inventory',
+    title: 'Inventory Report',
+    columns: [
+      { header: 'SKU', key: 'sku', width: 15 },
+      { header: 'Product Name', key: 'productName', width: 35 },
+      { header: 'Category', key: 'category', width: 20 },
+      { header: 'Batch Number', key: 'batchNumber', width: 18 },
+      { header: 'Location', key: 'location', width: 25 },
+      { header: 'Available Qty', key: 'availableQuantity', width: 15 },
+      { header: 'Reserved Qty', key: 'reservedQuantity', width: 15 },
+      { header: 'Total Qty', key: 'totalQuantity', width: 12 },
+      { header: 'Status', key: 'status', width: 12 },
+      {
+        header: 'Unit Cost',
+        key: 'unitCost',
+        width: 15,
+        format: (val: unknown) => (val ? `${(val as number).toFixed(2)} KWD` : 'N/A'),
+      },
+      {
+        header: 'Total Value',
+        key: 'totalValue',
+        width: 18,
+        format: (val: unknown) => (val ? `${(val as number).toLocaleString()} KWD` : 'N/A'),
+      },
+      { header: 'Expiry Date', key: 'expiryDate', width: 15 },
+      { header: 'Received Date', key: 'receivedDate', width: 15 },
+    ],
+  };
 
-  const categories = [...new Set(inventory.map(i => i.product.category).filter(Boolean))]
+  // Prepare export data
+  const exportData = inventory.map(item => ({
+    sku: item.product.sku,
+    productName: item.product.name,
+    category: item.product.category || 'Uncategorized',
+    batchNumber: item.batchNumber || 'N/A',
+    location: item.location || 'Not assigned',
+    availableQuantity: item.availableQuantity,
+    reservedQuantity: item.reservedQuantity,
+    totalQuantity: item.quantity,
+    status: item.status,
+    unitCost: item.unitCost || 0,
+    totalValue: item.totalValue || 0,
+    expiryDate: item.expiryDate ? format(new Date(item.expiryDate), 'MMM dd, yyyy') : 'N/A',
+    receivedDate: item.receivedDate ? format(new Date(item.receivedDate), 'MMM dd, yyyy') : 'N/A',
+  }));
+
+  const categories = [...new Set(inventory.map(i => i.product.category).filter(Boolean))];
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -463,10 +519,12 @@ export default function InventoryPage() {
           <p className="text-muted-foreground">Track and manage your medical equipment inventory</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={exportToCSV}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
+          <ExportButtons
+            data={exportData}
+            config={exportConfig}
+            variant="dropdown"
+            disabled={loading || inventory.length === 0}
+          />
           {canCreate && (
             <Button onClick={() => setShowAddDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -483,7 +541,13 @@ export default function InventoryPage() {
             <CardTitle className="text-lg flex items-center gap-2">
               <Brain className="h-5 w-5 text-purple-500" />
               AI Inventory Insights
-              <Button variant="ghost" size="sm" onClick={generateAIInsights} disabled={loadingAI}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={generateAIInsights}
+                disabled={loadingAI}
+                aria-label="Refresh AI insights"
+              >
                 <RefreshCw className={`h-4 w-4 ${loadingAI ? 'animate-spin' : ''}`} />
               </Button>
             </CardTitle>
@@ -494,17 +558,25 @@ export default function InventoryPage() {
                 <div
                   key={i}
                   className={`p-3 rounded-lg border ${
-                    insight.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
-                    insight.type === 'success' ? 'bg-green-50 border-green-200' :
-                    insight.type === 'prediction' ? 'bg-purple-50 border-purple-200' :
-                    'bg-blue-50 border-blue-200'
+                    insight.type === 'warning'
+                      ? 'bg-yellow-50 border-yellow-200'
+                      : insight.type === 'success'
+                        ? 'bg-green-50 border-green-200'
+                        : insight.type === 'prediction'
+                          ? 'bg-purple-50 border-purple-200'
+                          : 'bg-blue-50 border-blue-200'
                   }`}
                 >
                   <div className="flex items-start gap-2">
-                    {insight.type === 'warning' ? <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" /> :
-                     insight.type === 'success' ? <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" /> :
-                     insight.type === 'prediction' ? <BarChart3 className="h-4 w-4 text-purple-600 mt-0.5" /> :
-                     <Sparkles className="h-4 w-4 text-blue-600 mt-0.5" />}
+                    {insight.type === 'warning' ? (
+                      <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                    ) : insight.type === 'success' ? (
+                      <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                    ) : insight.type === 'prediction' ? (
+                      <BarChart3 className="h-4 w-4 text-purple-600 mt-0.5" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 text-blue-600 mt-0.5" />
+                    )}
                     <div className="flex-1">
                       <p className="font-medium text-sm">{insight.title}</p>
                       <p className="text-xs text-muted-foreground mt-1">{insight.description}</p>
@@ -590,9 +662,10 @@ export default function InventoryPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by product name, SKU, or batch..."
+                aria-label="Search inventory"
                 className="pl-9"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={e => setSearch(e.target.value)}
               />
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -615,7 +688,9 @@ export default function InventoryPage() {
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   {categories.map(cat => (
-                    <SelectItem key={cat} value={cat || ''}>{cat}</SelectItem>
+                    <SelectItem key={cat} value={cat || ''}>
+                      {cat}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -636,7 +711,9 @@ export default function InventoryPage() {
               <Package className="mx-auto h-12 w-12 text-muted-foreground" />
               <h3 className="mt-4 text-lg font-semibold">No inventory items found</h3>
               <p className="text-muted-foreground mt-2">
-                {search || statusFilter !== 'all' ? 'Try adjusting your filters' : 'Get started by adding stock'}
+                {search || statusFilter !== 'all'
+                  ? 'Try adjusting your filters'
+                  : 'Get started by adding stock'}
               </p>
               {canCreate && (
                 <Button className="mt-4" onClick={() => setShowAddDialog(true)}>
@@ -660,7 +737,7 @@ export default function InventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inventory.map((item) => (
+                {inventory.map(item => (
                   <TableRow key={item.id}>
                     <TableCell>
                       <div>
@@ -694,7 +771,9 @@ export default function InventoryPage() {
                     <TableCell>
                       {item.expiryDate ? (
                         <div>
-                          <p className={`text-sm ${new Date(item.expiryDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) ? 'text-red-600 font-medium' : ''}`}>
+                          <p
+                            className={`text-sm ${new Date(item.expiryDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) ? 'text-red-600 font-medium' : ''}`}
+                          >
                             {format(new Date(item.expiryDate), 'MMM d, yyyy')}
                           </p>
                         </div>
@@ -711,15 +790,17 @@ export default function InventoryPage() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label="Item actions">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => {
-                            setSelectedItem(item)
-                            setShowAdjustDialog(true)
-                          }}>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setShowAdjustDialog(true);
+                            }}
+                          >
                             <Edit className="h-4 w-4 mr-2" />
                             Adjust Stock
                           </DropdownMenuItem>
@@ -757,7 +838,7 @@ export default function InventoryPage() {
               <Label>Product *</Label>
               <Input
                 value={formData.productId}
-                onChange={(e) => setFormData(prev => ({ ...prev, productId: e.target.value }))}
+                onChange={e => setFormData(prev => ({ ...prev, productId: e.target.value }))}
                 placeholder="Search or select product"
               />
             </div>
@@ -767,7 +848,7 @@ export default function InventoryPage() {
                 <Input
                   type="number"
                   value={formData.quantity}
-                  onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
+                  onChange={e => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
                   placeholder="0"
                 />
               </div>
@@ -777,7 +858,7 @@ export default function InventoryPage() {
                   type="number"
                   step="0.01"
                   value={formData.unitCost}
-                  onChange={(e) => setFormData(prev => ({ ...prev, unitCost: e.target.value }))}
+                  onChange={e => setFormData(prev => ({ ...prev, unitCost: e.target.value }))}
                   placeholder="0.00"
                 />
               </div>
@@ -787,7 +868,7 @@ export default function InventoryPage() {
                 <Label>Batch Number</Label>
                 <Input
                   value={formData.batchNumber}
-                  onChange={(e) => setFormData(prev => ({ ...prev, batchNumber: e.target.value }))}
+                  onChange={e => setFormData(prev => ({ ...prev, batchNumber: e.target.value }))}
                   placeholder="BATCH-001"
                 />
               </div>
@@ -795,7 +876,7 @@ export default function InventoryPage() {
                 <Label>Serial Number</Label>
                 <Input
                   value={formData.serialNumber}
-                  onChange={(e) => setFormData(prev => ({ ...prev, serialNumber: e.target.value }))}
+                  onChange={e => setFormData(prev => ({ ...prev, serialNumber: e.target.value }))}
                   placeholder="SN-12345"
                 />
               </div>
@@ -805,14 +886,16 @@ export default function InventoryPage() {
                 <Label>Location</Label>
                 <Select
                   value={formData.location}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, location: v }))}
+                  onValueChange={v => setFormData(prev => ({ ...prev, location: v }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
                     {LOCATIONS.map(loc => (
-                      <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                      <SelectItem key={loc} value={loc}>
+                        {loc}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -822,14 +905,19 @@ export default function InventoryPage() {
                 <Input
                   type="date"
                   value={formData.expiryDate}
-                  onChange={(e) => setFormData(prev => ({ ...prev, expiryDate: e.target.value }))}
+                  onChange={e => setFormData(prev => ({ ...prev, expiryDate: e.target.value }))}
                 />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-            <Button onClick={handleAddStock} disabled={saving || !formData.productId || !formData.quantity}>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddStock}
+              disabled={saving || !formData.productId || !formData.quantity}
+            >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add Stock
             </Button>
@@ -843,7 +931,8 @@ export default function InventoryPage() {
           <DialogHeader>
             <DialogTitle>Adjust Stock</DialogTitle>
             <DialogDescription>
-              {selectedItem && `Adjusting: ${selectedItem.product.name} (Current: ${selectedItem.availableQuantity})`}
+              {selectedItem &&
+                `Adjusting: ${selectedItem.product.name} (Current: ${selectedItem.availableQuantity})`}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -852,7 +941,7 @@ export default function InventoryPage() {
               <Input
                 type="number"
                 value={adjustData.adjustment}
-                onChange={(e) => setAdjustData(prev => ({ ...prev, adjustment: e.target.value }))}
+                onChange={e => setAdjustData(prev => ({ ...prev, adjustment: e.target.value }))}
                 placeholder="e.g., -5 or +10"
               />
               <p className="text-xs text-muted-foreground">
@@ -863,7 +952,7 @@ export default function InventoryPage() {
               <Label>Reason</Label>
               <Select
                 value={adjustData.reason}
-                onValueChange={(v) => setAdjustData(prev => ({ ...prev, reason: v }))}
+                onValueChange={v => setAdjustData(prev => ({ ...prev, reason: v }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -880,7 +969,9 @@ export default function InventoryPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdjustDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowAdjustDialog(false)}>
+              Cancel
+            </Button>
             <Button onClick={handleAdjustStock} disabled={saving || !adjustData.adjustment}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Apply Adjustment
@@ -889,5 +980,5 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

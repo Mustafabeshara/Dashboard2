@@ -383,6 +383,7 @@ export function DocumentUpload({
                       variant="ghost"
                       size="icon"
                       onClick={() => removeFile(uploadedFile.id)}
+                      aria-label="Remove file"
                     >
                       <X className="h-4 w-4" />
                     </Button>

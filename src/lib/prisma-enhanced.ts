@@ -1,8 +1,21 @@
 /**
  * Enhanced Prisma Client with Connection Pooling and Query Monitoring
  */
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, Prisma } from '@prisma/client'
 import { logger } from './logger'
+
+// Prisma event types
+interface PrismaQueryEvent {
+  query: string
+  params: string
+  duration: number
+  target: string
+}
+
+interface PrismaErrorEvent {
+  message: string
+  target: string
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -29,7 +42,7 @@ async function createPrismaClient(): Promise<PrismaClient> {
   })
 
   // Query monitoring - log slow queries
-  client.$on('query' as any, (e: any) => {
+  client.$on('query', (e: PrismaQueryEvent) => {
     if (e.duration > 1000) { // Queries over 1 second
       logger.warn('Slow query detected', {
         context: {
@@ -49,9 +62,9 @@ async function createPrismaClient(): Promise<PrismaClient> {
   })
 
   // Error logging
-  client.$on('error' as any, (e: any) => {
+  client.$on('error', (e: PrismaErrorEvent) => {
     logger.error('Prisma error', new Error(e.message), {
-      target: e.target,
+      context: { target: e.target },
     })
   })
 
@@ -140,7 +153,7 @@ function getPrismaClientSync(): PrismaClient {
     })
 
     // Add query monitoring
-    client.$on('query' as any, (e: any) => {
+    client.$on('query', (e: PrismaQueryEvent) => {
       if (e.duration > 1000) {
         logger.warn('Slow query detected', {
           context: {
@@ -151,7 +164,7 @@ function getPrismaClientSync(): PrismaClient {
       }
     })
 
-    client.$on('error' as any, (e: any) => {
+    client.$on('error', (e: PrismaErrorEvent) => {
       logger.error('Prisma error', new Error(e.message))
     })
 

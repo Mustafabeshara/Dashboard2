@@ -5,21 +5,62 @@
 
 import { logger } from './logger'
 
-interface CacheEntry {
-  value: any
+interface CacheEntry<T = unknown> {
+  value: T
   expiresAt: number
+}
+
+// Redis client interface for type safety
+interface RedisClientInterface {
+  get: (key: string) => Promise<string | null>
+  setEx: (key: string, ttl: number, value: string) => Promise<unknown>
+  del: (key: string | string[]) => Promise<number>
+  keys: (pattern: string) => Promise<string[]>
+  flushAll: () => Promise<unknown>
+  connect: () => Promise<unknown>
 }
 
 class CacheManager {
   private memoryCache: Map<string, CacheEntry> = new Map()
-  private redis: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private redis: RedisClientInterface | null = null
   private readonly MAX_CACHE_SIZE = 10000
   private accessOrder: string[] = [] // For LRU tracking
+  private cleanupInterval: NodeJS.Timeout | null = null
+  private isDestroyed = false
 
   constructor() {
     this.initializeRedis()
+    this.startCleanup()
+  }
+
+  private startCleanup(): void {
+    if (this.isDestroyed) return
+
     // Clean up expired entries every minute
-    setInterval(() => this.cleanup(), 60000)
+    this.cleanupInterval = setInterval(() => this.cleanup(), 60000)
+
+    // Allow process to exit even if interval is running
+    if (this.cleanupInterval.unref) {
+      this.cleanupInterval.unref()
+    }
+  }
+
+  /**
+   * Destroy the cache manager and clean up resources
+   */
+  destroy(): void {
+    this.isDestroyed = true
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval)
+      this.cleanupInterval = null
+    }
+    this.memoryCache.clear()
+    this.accessOrder = []
+    if (this.redis) {
+      // Note: Redis connection cleanup handled separately
+      this.redis = null
+    }
   }
 
   private async initializeRedis() {
@@ -28,8 +69,9 @@ class CacheManager {
       if (process.env.REDIS_URL) {
         // Dynamically import Redis only if URL is provided
         const { createClient } = await import('redis')
-        this.redis = createClient({ url: process.env.REDIS_URL })
-        await this.redis.connect()
+        const client = createClient({ url: process.env.REDIS_URL })
+        await client.connect()
+        this.redis = client as unknown as RedisClientInterface
         logger.info('Redis cache connected')
       }
     } catch (error) {
@@ -82,7 +124,7 @@ class CacheManager {
         // Update LRU order
         this.removeFromAccessOrder(key)
         this.accessOrder.push(key)
-        return entry.value
+        return entry.value as T
       }
 
       logger.debug(`Cache miss: ${key}`)
@@ -93,7 +135,7 @@ class CacheManager {
     }
   }
 
-  async set(key: string, value: any, ttlSeconds: number = 300): Promise<void> {
+  async set<T>(key: string, value: T, ttlSeconds: number = 300): Promise<void> {
     try {
       const expiresAt = Date.now() + ttlSeconds * 1000
 
@@ -180,23 +222,33 @@ class CacheManager {
 // Create singleton instance
 export const cache = new CacheManager()
 
+// Type for list parameters
+export interface ListParams {
+  page?: number
+  limit?: number
+  search?: string
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+  [key: string]: unknown
+}
+
 // Cache key generators
 export const CacheKeys = {
   tenders: {
-    list: (params: any) => `tenders:list:${JSON.stringify(params)}`,
+    list: (params: ListParams) => `tenders:list:${JSON.stringify(params)}`,
     detail: (id: string) => `tenders:detail:${id}`,
     stats: () => 'tenders:stats',
   },
   customers: {
-    list: (params: any) => `customers:list:${JSON.stringify(params)}`,
+    list: (params: ListParams) => `customers:list:${JSON.stringify(params)}`,
     detail: (id: string) => `customers:detail:${id}`,
   },
   invoices: {
-    list: (params: any) => `invoices:list:${JSON.stringify(params)}`,
+    list: (params: ListParams) => `invoices:list:${JSON.stringify(params)}`,
     detail: (id: string) => `invoices:detail:${id}`,
   },
   reports: {
-    generate: (template: string, params: any) =>
+    generate: (template: string, params: Record<string, unknown>) =>
       `reports:${template}:${JSON.stringify(params)}`,
   },
   dashboard: {

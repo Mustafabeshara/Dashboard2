@@ -9,8 +9,17 @@ import '@testing-library/jest-dom'
 if (typeof Request === 'undefined') {
   global.Request = class Request {
     constructor(input, init) {
-      this.url = typeof input === 'string' ? input : input.url
-      this.method = init?.method || 'GET'
+      // Use defineProperty to allow NextRequest to override
+      Object.defineProperty(this, 'url', {
+        value: typeof input === 'string' ? input : input?.url || '',
+        writable: true,
+        configurable: true,
+      })
+      Object.defineProperty(this, 'method', {
+        value: init?.method || 'GET',
+        writable: true,
+        configurable: true,
+      })
       this.headers = new Map(Object.entries(init?.headers || {}))
     }
   }
@@ -21,10 +30,21 @@ if (typeof Response === 'undefined') {
     constructor(body, init) {
       this.body = body
       this.status = init?.status || 200
+      this.statusText = init?.statusText || 'OK'
+      this.ok = this.status >= 200 && this.status < 300
       this.headers = new Map(Object.entries(init?.headers || {}))
     }
     json() {
-      return Promise.resolve(JSON.parse(this.body))
+      return Promise.resolve(typeof this.body === 'string' ? JSON.parse(this.body) : this.body)
+    }
+    text() {
+      return Promise.resolve(typeof this.body === 'string' ? this.body : JSON.stringify(this.body))
+    }
+    static json(data, init) {
+      return new Response(JSON.stringify(data), {
+        ...init,
+        headers: { 'content-type': 'application/json', ...init?.headers },
+      })
     }
   }
 }
@@ -69,7 +89,7 @@ jest.mock('next/navigation', () => ({
   },
 }))
 
-// Mock NextAuth
+// Mock NextAuth React
 jest.mock('next-auth/react', () => ({
   useSession() {
     return {
@@ -88,6 +108,36 @@ jest.mock('next-auth/react', () => ({
   signOut: jest.fn(),
 }))
 
+// Mock NextAuth server-side
+jest.mock('next-auth', () => ({
+  __esModule: true,
+  default: jest.fn(() => ({
+    auth: jest.fn(),
+    handlers: { GET: jest.fn(), POST: jest.fn() },
+  })),
+  getServerSession: jest.fn(() => Promise.resolve({
+    user: {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      fullName: 'Test User',
+      role: 'ADMIN',
+    },
+  })),
+}))
+
+// Mock NextAuth next module
+jest.mock('next-auth/next', () => ({
+  __esModule: true,
+  getServerSession: jest.fn(() => Promise.resolve({
+    user: {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      fullName: 'Test User',
+      role: 'ADMIN',
+    },
+  })),
+}))
+
 // Mock Prisma Client
 jest.mock('@/lib/prisma', () => ({
   prisma: {
@@ -96,6 +146,31 @@ jest.mock('@/lib/prisma', () => ({
     $transaction: jest.fn(),
   },
 }))
+
+// Mock Prisma Client module for error types
+jest.mock('@prisma/client', () => {
+  const actualPrisma = jest.requireActual('@prisma/client')
+  return {
+    ...actualPrisma,
+    Prisma: {
+      ...actualPrisma.Prisma,
+      PrismaClientKnownRequestError: class PrismaClientKnownRequestError extends Error {
+        constructor(message, { code, meta } = {}) {
+          super(message)
+          this.code = code
+          this.meta = meta
+          this.name = 'PrismaClientKnownRequestError'
+        }
+      },
+      PrismaClientValidationError: class PrismaClientValidationError extends Error {
+        constructor(message) {
+          super(message)
+          this.name = 'PrismaClientValidationError'
+        }
+      },
+    },
+  }
+})
 
 // Suppress console errors in tests
 global.console = {

@@ -7,6 +7,7 @@
 
 import { TenderItems } from '@/components/tender/TenderItems';
 import { TenderParticipants } from '@/components/tender/TenderParticipants';
+import { TenderSourceDocuments } from '@/components/tender/TenderSourceDocuments';
 import { TenderSpecificationAnalysis } from '@/components/tender/TenderSpecificationAnalysis';
 import { TenderSubmissionDocuments } from '@/components/tender/TenderSubmissionDocuments';
 import { Badge } from '@/components/ui/badge';
@@ -91,6 +92,17 @@ interface TenderAnalysis {
 export default function TenderDetailPage({ params }: TenderDetailProps) {
   const { id } = use(params);
   const router = useRouter();
+
+  // Check if this is a static route path (not a tender ID)
+  const staticRoutes = ['bulk-upload', 'create', 'pipeline'];
+  const isStaticRoute = staticRoutes.includes(id);
+
+  // If this is a static route that was incorrectly caught by [id], return null
+  // Next.js will continue to check other routes
+  if (isStaticRoute) {
+    return null;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tender, setTender] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -302,7 +314,7 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
+          <Button variant="ghost" size="icon" asChild aria-label="Back to tenders">
             <Link href="/tenders">
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -325,10 +337,10 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
             )}
             {analyzingAI ? 'Analyzing...' : 'AI Analysis'}
           </Button>
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" aria-label="Edit tender">
             <Edit className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={handleDelete}>
+          <Button variant="outline" size="icon" onClick={handleDelete} aria-label="Delete tender">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
@@ -667,6 +679,15 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
             submissionDeadline={tender.submissionDeadline}
           />
 
+          {/* Source Documents - Original tender PDFs */}
+          <TenderSourceDocuments
+            tenderId={tender.id}
+            tenderNumber={tender.tenderNumber}
+            isReadOnly={
+              tender.status === 'WON' || tender.status === 'LOST' || tender.status === 'CANCELLED'
+            }
+          />
+
           {/* Submission Documents */}
           <TenderSubmissionDocuments
             tenderId={tender.id}
@@ -678,10 +699,7 @@ export default function TenderDetailPage({ params }: TenderDetailProps) {
           />
 
           {/* AI Specification Analysis - Manufacturers & Competitors */}
-          <TenderSpecificationAnalysis
-            tenderId={tender.id}
-            tenderTitle={tender.title}
-          />
+          <TenderSpecificationAnalysis tenderId={tender.id} tenderTitle={tender.title} />
 
           {/* Products/Items (Legacy - for old tenders) */}
           {products.length > 0 && (

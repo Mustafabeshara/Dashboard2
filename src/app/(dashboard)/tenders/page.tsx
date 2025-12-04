@@ -3,86 +3,130 @@
  * Main tender management interface
  */
 
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { ExportButtons } from '@/components/ExportButtons';
+import { TenderCard } from '@/components/tenders/tender-card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { TenderCard } from '@/components/tenders/tender-card'
-import { Plus, Search, Filter, FileText } from 'lucide-react'
-import { TenderStatus } from '@prisma/client'
+} from '@/components/ui/select';
+import { TenderStatus } from '@prisma/client';
+import { FileText, Filter, Plus, Search } from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 interface Tender {
-  id: string
-  tenderNumber: string
-  title: string
-  description?: string | null
-  status: TenderStatus
-  submissionDeadline?: Date | string | null
-  estimatedValue?: number | null
-  currency?: string
-  department?: string | null
+  id: string;
+  tenderNumber: string;
+  title: string;
+  description?: string | null;
+  status: TenderStatus;
+  submissionDeadline?: Date | string | null;
+  estimatedValue?: number | null;
+  currency?: string;
+  department?: string | null;
   customer?: {
-    name: string
-  } | null
-  createdAt: Date | string
+    name: string;
+  } | null;
+  createdAt: Date | string;
 }
 
 export default function TendersPage() {
-  const [tenders, setTenders] = useState<Tender[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
+  const [tenders, setTenders] = useState<Tender[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    fetchTenders()
-  }, [page, statusFilter])
+    fetchTenders();
+  }, [page, statusFilter]);
 
   const fetchTenders = async () => {
     try {
-      setLoading(true)
+      setLoading(true);
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '12',
-      })
+      });
 
       if (statusFilter && statusFilter !== 'all') {
-        params.append('status', statusFilter)
+        params.append('status', statusFilter);
       }
 
       if (search) {
-        params.append('search', search)
+        params.append('search', search);
       }
 
-      const response = await fetch(`/api/tenders?${params}`)
-      const result = await response.json()
+      const response = await fetch(`/api/tenders?${params}`);
+      const result = await response.json();
 
       if (result.success) {
-        setTenders(result.data)
-        setTotalPages(result.pagination.totalPages)
+        setTenders(result.data);
+        setTotalPages(result.pagination.totalPages);
       }
     } catch (error) {
-      console.error('Error fetching tenders:', error)
+      console.error('Error fetching tenders:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    setPage(1)
-    fetchTenders()
-  }
+    e.preventDefault();
+    setPage(1);
+    fetchTenders();
+  };
+
+  // Export configuration for tenders
+  const exportConfig = {
+    filename: 'tenders',
+    title: 'Tenders Report',
+    columns: [
+      { header: 'Tender Number', key: 'tenderNumber', width: 20 },
+      { header: 'Title', key: 'title', width: 40 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Organization', key: 'organization', width: 30 },
+      { header: 'Department', key: 'department', width: 20 },
+      {
+        header: 'Estimated Value',
+        key: 'estimatedValue',
+        width: 18,
+        format: (val: unknown) => (val ? `${(val as number).toLocaleString()} KWD` : 'N/A'),
+      },
+      { header: 'Submission Deadline', key: 'submissionDeadline', width: 20 },
+      { header: 'Created Date', key: 'createdAt', width: 18 },
+    ],
+  };
+
+  // Prepare export data
+  const exportData = tenders.map(t => ({
+    tenderNumber: t.tenderNumber,
+    title: t.title,
+    status: t.status,
+    organization: t.customer?.name || 'N/A',
+    department: t.department || 'N/A',
+    estimatedValue: t.estimatedValue || 0,
+    submissionDeadline: t.submissionDeadline
+      ? new Date(t.submissionDeadline).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        })
+      : 'N/A',
+    createdAt: new Date(t.createdAt).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }),
+  }));
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -90,11 +134,15 @@ export default function TendersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tenders</h1>
-          <p className="text-muted-foreground">
-            Manage government tenders and submissions
-          </p>
+          <p className="text-muted-foreground">Manage government tenders and submissions</p>
         </div>
         <div className="flex gap-2">
+          <ExportButtons
+            data={exportData}
+            config={exportConfig}
+            variant="dropdown"
+            disabled={loading || tenders.length === 0}
+          />
           <Button asChild>
             <Link href="/tenders/create">
               <Plus className="mr-2 h-4 w-4" />
@@ -124,7 +172,7 @@ export default function TendersPage() {
             <Input
               placeholder="Search by tender number, title, or organization..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               className="pl-10"
             />
           </div>
@@ -152,10 +200,7 @@ export default function TendersPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => (
-            <div
-              key={i}
-              className="h-64 bg-muted animate-pulse rounded-lg"
-            />
+            <div key={i} className="h-64 bg-muted animate-pulse rounded-lg" />
           ))}
         </div>
       ) : tenders.length === 0 ? (
@@ -177,7 +222,7 @@ export default function TendersPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {tenders.map((tender) => (
+            {tenders.map(tender => (
               <TenderCard key={tender.id} tender={tender} />
             ))}
           </div>
@@ -187,7 +232,7 @@ export default function TendersPage() {
             <div className="flex items-center justify-center gap-2 mt-8">
               <Button
                 variant="outline"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
               >
                 Previous
@@ -197,7 +242,7 @@ export default function TendersPage() {
               </span>
               <Button
                 variant="outline"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
               >
                 Next
@@ -207,5 +252,5 @@ export default function TendersPage() {
         </>
       )}
     </div>
-  )
+  );
 }

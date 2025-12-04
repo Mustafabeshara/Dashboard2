@@ -3,19 +3,23 @@
  * GET /api/budgets - List all budgets
  * POST /api/budgets - Create a new budget
  */
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
+import { NextRequest } from 'next/server'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
-import { authOptions } from '@/lib/auth'
+import { withAuth, AuthenticatedRequest } from '@/lib/middleware/with-auth'
+import { ApiResponse, ApiPaginated, BadRequest, InternalError } from '@/lib/api'
+import { logger } from '@/lib/logger'
+import { parsePagination, parseSort, parseSearch, buildSearchWhere, getPaginationMeta } from '@/lib/utils/pagination'
+import { handleError } from '@/lib/errors/error-handler'
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit'
 
 // Validation schema for creating a budget
 const createBudgetSchema = z.object({
-  name: z.string().min(3),
+  name: z.string().min(3, 'Name must be at least 3 characters'),
   fiscalYear: z.number().min(2020).max(2030),
   type: z.enum(['MASTER', 'DEPARTMENT', 'PROJECT', 'TENDER']),
   department: z.string().optional(),
-  totalAmount: z.number().min(0),
+  totalAmount: z.number().min(0, 'Amount must be positive'),
   startDate: z.string(),
   endDate: z.string(),
   currency: z.string().default('KWD'),
@@ -31,47 +35,52 @@ const createBudgetSchema = z.object({
   })).optional(),
 })
 
+// Budget search params schema
+const budgetSearchSchema = z.object({
+  status: z.enum(['DRAFT', 'ACTIVE', 'CLOSED', 'CANCELLED', 'ALL']).optional(),
+  type: z.enum(['MASTER', 'DEPARTMENT', 'PROJECT', 'TENDER', 'ALL']).optional(),
+  fiscalYear: z.coerce.number().optional(),
+  department: z.string().optional(),
+})
+
+const rateLimiter = rateLimit(RateLimitPresets.standard)
+
 /**
  * GET /api/budgets - List all budgets with optional filters
  */
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+async function handleGet(request: AuthenticatedRequest) {
+  // Check rate limit
+  const rateLimitResponse = await rateLimiter(request)
+  if (rateLimitResponse) return rateLimitResponse
 
-    const searchParams = request.nextUrl.searchParams
-    const status = searchParams.get('status')
-    const type = searchParams.get('type')
-    const fiscalYear = searchParams.get('fiscalYear')
-    const department = searchParams.get('department')
-    const search = searchParams.get('search')
-    const page = parseInt(searchParams.get('page') || '1')
-    const pageSize = parseInt(searchParams.get('pageSize') || '20')
+  try {
+    const { pagination, sort } = {
+      pagination: parsePagination(request),
+      sort: parseSort(request, ['createdAt', 'name', 'totalAmount', 'startDate'], 'createdAt'),
+    }
+    const search = parseSearch(request)
+
+    // Parse filters
+    const params = Object.fromEntries(request.nextUrl.searchParams.entries())
+    const filters = budgetSearchSchema.safeParse(params)
 
     // Build where clause
     const where: Record<string, unknown> = {
       isDeleted: false,
     }
 
-    if (status && status !== 'ALL') {
-      where.status = status
+    if (filters.success) {
+      const { status, type, fiscalYear, department } = filters.data
+      if (status && status !== 'ALL') where.status = status
+      if (type && type !== 'ALL') where.type = type
+      if (fiscalYear) where.fiscalYear = fiscalYear
+      if (department && department !== 'ALL') where.department = department
     }
-    if (type && type !== 'ALL') {
-      where.type = type
-    }
-    if (fiscalYear && fiscalYear !== 'ALL') {
-      where.fiscalYear = parseInt(fiscalYear)
-    }
-    if (department && department !== 'ALL') {
-      where.department = department
-    }
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { department: { contains: search, mode: 'insensitive' } },
-      ]
+
+    // Add search
+    const searchWhere = buildSearchWhere(search, ['name', 'department'])
+    if (searchWhere) {
+      where.OR = searchWhere.OR
     }
 
     // Get total count
@@ -103,9 +112,9 @@ export async function GET(request: NextRequest) {
           select: { categories: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      orderBy: { [sort.sortBy]: sort.sortOrder },
+      skip: pagination.skip,
+      take: pagination.limit,
     })
 
     // Calculate spent amounts for each budget
@@ -128,37 +137,42 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({
-      success: true,
-      data: budgetsWithSpent,
-      pagination: {
+    logger.info('Budgets fetched', {
+      context: {
+        userId: request.user.id,
+        count: budgets.length,
         total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
       },
     })
+
+    return ApiPaginated(budgetsWithSpent, pagination.page, pagination.limit, total)
   } catch (error) {
-    console.error('Error fetching budgets:', error)
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch budgets' },
-      { status: 500 }
-    )
+    logger.error('Error fetching budgets', error as Error, { userId: request.user.id })
+    return handleError(error)
   }
 }
 
 /**
  * POST /api/budgets - Create a new budget
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: AuthenticatedRequest) {
+  // Check rate limit
+  const rateLimitResponse = await rateLimiter(request)
+  if (rateLimitResponse) return rateLimitResponse
+
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const body = await request.json()
+    const parseResult = createBudgetSchema.safeParse(body)
+
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      }))
+      return BadRequest('Validation failed', errors)
     }
 
-    const body = await request.json()
-    const validatedData = createBudgetSchema.parse(body)
+    const validatedData = parseResult.data
 
     // Create budget with categories in a transaction
     const budget = await prisma.$transaction(async (tx) => {
@@ -175,7 +189,7 @@ export async function POST(request: NextRequest) {
           currency: validatedData.currency,
           notes: validatedData.notes,
           status: 'DRAFT',
-          createdById: session.user.id,
+          createdById: request.user.id,
         },
       })
 
@@ -198,7 +212,7 @@ export async function POST(request: NextRequest) {
       // Create audit log
       await tx.auditLog.create({
         data: {
-          userId: session.user.id,
+          userId: request.user.id,
           action: 'CREATE',
           entityType: 'BUDGET',
           entityId: newBudget.id,
@@ -220,24 +234,21 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({
-      success: true,
-      data: createdBudget,
-      message: 'Budget created successfully',
-    }, { status: 201 })
+    logger.info('Budget created', {
+      context: {
+        userId: request.user.id,
+        budgetId: budget.id,
+        name: validatedData.name,
+      },
+    })
+
+    return ApiResponse(createdBudget, 201)
   } catch (error) {
-    console.error('Error creating budget:', error)
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    return NextResponse.json(
-      { success: false, error: 'Failed to create budget' },
-      { status: 500 }
-    )
+    logger.error('Error creating budget', error as Error, { userId: request.user.id })
+    return handleError(error)
   }
 }
+
+// Export with auth middleware
+export const GET = withAuth(handleGet)
+export const POST = withAuth(handlePost, { roleGroup: 'FINANCE' })

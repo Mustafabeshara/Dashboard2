@@ -332,8 +332,10 @@ ${JSON.stringify(
         };
       }
 
-      // TODO: Store forecast in database (requires prisma generate after schema update)
-      // Uncomment after running: npx prisma generate
+      // NOTE: Forecast model not in current Prisma schema
+      // Database persistence would require adding Forecast model to prisma/schema.prisma
+      // and running: npx prisma migrate dev --name add-forecast-model
+      // For now, forecasts are ephemeral (not persisted to database)
       /*
       const confidenceScore = forecastData.metrics?.revenue?.confidence || 70;
       

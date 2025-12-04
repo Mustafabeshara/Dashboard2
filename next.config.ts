@@ -1,7 +1,7 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  output: 'standalone',
 
   // Disable type checking during build (already done in CI)
   typescript: {
@@ -12,9 +12,7 @@ const nextConfig: NextConfig = {
   experimental: {
     // Reduce bundle size
     optimizePackageImports: ['lucide-react', 'recharts'],
-  },
-
-  // Security headers
+  }, // Security headers
   async headers() {
     return [
       {
@@ -62,7 +60,7 @@ const nextConfig: NextConfig = {
               "frame-ancestors 'self'",
               "form-action 'self'",
               "base-uri 'self'",
-              "upgrade-insecure-requests",
+              'upgrade-insecure-requests',
             ].join('; '),
           },
         ],

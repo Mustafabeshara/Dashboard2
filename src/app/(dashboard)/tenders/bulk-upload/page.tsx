@@ -3,83 +3,88 @@
  * Upload multiple tender documents at once for AI extraction
  */
 
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, FileArchive, Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { BulkTenderUpload } from '@/components/tenders/bulk-tender-upload'
-import { toast } from 'sonner'
+import { BulkTenderUpload } from '@/components/tenders/bulk-tender-upload';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, FileArchive, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface ExtractedTenderData {
-  reference: string
-  title: string
-  organization: string
-  closingDate: string
+  reference: string;
+  title: string;
+  organization: string;
+  closingDate: string;
   items: Array<{
-    itemDescription: string
-    quantity: number
-    unit: string
-  }>
-  notes: string
+    itemDescription: string;
+    quantity: number;
+    unit: string;
+  }>;
+  notes: string;
 }
 
 export default function BulkUploadPage() {
-  const router = useRouter()
-  const [createdCount, setCreatedCount] = useState(0)
+  const router = useRouter();
+  const [createdCount, setCreatedCount] = useState(0);
 
   const handleComplete = (results: any[]) => {
-    const successCount = results.filter((r) => r.success).length
-    const failCount = results.filter((r) => !r.success).length
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
 
     if (successCount > 0) {
-      toast.success(`Successfully extracted ${successCount} tenders`)
+      toast.success(`Successfully extracted ${successCount} tenders`);
     }
     if (failCount > 0) {
-      toast.warning(`${failCount} files failed to process`)
+      toast.warning(`${failCount} files failed to process`);
     }
-  }
+  };
 
   const handleCreateTender = async (data: ExtractedTenderData) => {
     try {
+      // Ensure tender number is unique by adding timestamp if needed
+      const tenderNumber = data.reference || `TENDER-${Date.now()}`;
+
       const response = await fetch('/api/tenders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          tenderNumber: data.reference,
-          title: data.title,
-          description: data.notes,
+          tenderNumber,
+          title: data.title || 'Untitled Tender',
+          description: `Organization: ${data.organization || 'N/A'}\n\n${data.notes || ''}`,
           submissionDeadline: data.closingDate ? new Date(data.closingDate).toISOString() : null,
-          products: data.items.map((item, index) => ({
-            id: `item-${index}`,
-            name: item.itemDescription,
-            quantity: item.quantity,
-            unit: item.unit,
-          })),
-          notes: `Organization: ${data.organization}\n\n${data.notes || ''}`,
+          products:
+            data.items?.map((item, index) => ({
+              id: `item-${index}`,
+              name: item.itemDescription || 'Item',
+              quantity: item.quantity || 1,
+              unit: item.unit || 'unit',
+            })) || [],
+          notes: data.notes || '',
           status: 'DRAFT',
+          currency: 'KWD',
         }),
-      })
+      });
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to create tender')
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create tender');
       }
 
-      const result = await response.json()
-      setCreatedCount((prev) => prev + 1)
-      toast.success(`Tender ${data.reference} created successfully`)
+      const result = await response.json();
+      setCreatedCount(prev => prev + 1);
+      toast.success(`Tender ${data.reference} created successfully`);
 
       // Optionally navigate to the new tender
       // router.push(`/tenders/${result.data.id}`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create tender')
+      toast.error(error instanceof Error ? error.message : 'Failed to create tender');
     }
-  }
+  };
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -104,9 +109,7 @@ export default function BulkUploadPage() {
         </div>
         {createdCount > 0 && (
           <Button asChild>
-            <Link href="/tenders">
-              View Tenders ({createdCount} created)
-            </Link>
+            <Link href="/tenders">View Tenders ({createdCount} created)</Link>
           </Button>
         )}
       </div>
@@ -123,10 +126,7 @@ export default function BulkUploadPage() {
       </div>
 
       {/* Bulk Upload Component */}
-      <BulkTenderUpload
-        onComplete={handleComplete}
-        onCreateTender={handleCreateTender}
-      />
+      <BulkTenderUpload onComplete={handleComplete} onCreateTender={handleCreateTender} />
     </div>
-  )
+  );
 }

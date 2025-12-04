@@ -409,13 +409,13 @@ export default function AdminTemplatesPage() {
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="ghost" size="icon" onClick={() => handleDuplicate(template)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDuplicate(template)} aria-label="Duplicate template">
                       <Copy className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(template)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(template)} aria-label="Edit template">
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(template.id)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(template.id)} aria-label="Delete template">
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>

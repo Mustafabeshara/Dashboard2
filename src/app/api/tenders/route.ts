@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
       commercialRequirements,
       bondRequired = false,
       bondAmount,
-      createdById,
+      createdById, // Optional - will use session user if not provided
       notes,
     } = body;
 
@@ -165,6 +165,9 @@ export async function POST(request: NextRequest) {
     if (!tenderNumber || !title) {
       return NextResponse.json({ error: 'Tender number and title are required' }, { status: 400 });
     }
+
+    // Use session user ID if createdById not provided
+    const creatorId = createdById || session.user.id;
 
     // Check if tender number already exists
     const existing = await prisma.tender.findUnique({
@@ -197,7 +200,7 @@ export async function POST(request: NextRequest) {
           commercialRequirements,
           bondRequired,
           bondAmount,
-          createdById,
+          createdById: creatorId, // Use creatorId variable
           notes,
         },
         include: {
@@ -238,8 +241,6 @@ export async function POST(request: NextRequest) {
 
       return newTender;
     });
-
-    console.log(`[Tender] Created tender: ${tender.id} (${tender.tenderNumber})`);
 
     // Clear cache
     await cache.clear('tenders:list:');

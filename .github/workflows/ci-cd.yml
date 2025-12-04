@@ -1,7 +1,5 @@
-/**
- * GitHub Actions CI/CD Workflow
- * Runs tests, security checks, and deploys to Railway
- */
+# GitHub Actions CI/CD Workflow
+# Runs tests, security checks, and deploys to Railway
 
 name: CI/CD Pipeline
 
@@ -17,44 +15,44 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Validate environment configuration
         run: npm run validate:env
         env:
-          DATABASE_URL: "postgresql://test:test@localhost:5432/test"
-          NEXTAUTH_SECRET: "test-secret-key-minimum-32-characters"
-          NEXTAUTH_URL: "http://localhost:3000"
-          GROQ_API_KEY: "test-key"
+          DATABASE_URL: 'postgresql://test:test@localhost:5432/test'
+          NEXTAUTH_SECRET: 'test-secret-key-minimum-32-characters'
+          NEXTAUTH_URL: 'http://localhost:3000'
+          GROQ_API_KEY: 'test-key'
 
   lint:
     name: Lint Code
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run ESLint
         run: npm run lint
 
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -69,36 +67,36 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Generate Prisma clients
         run: npm run db:generate:all
         env:
-          DATABASE_URL: "postgresql://test:test@localhost:5432/test_db"
-      
+          DATABASE_URL: 'postgresql://test:test@localhost:5432/test_db'
+
       - name: Run database migrations
         run: npm run db:push
         env:
-          DATABASE_URL: "postgresql://test:test@localhost:5432/test_db"
-      
+          DATABASE_URL: 'postgresql://test:test@localhost:5432/test_db'
+
       - name: Run tests
         run: npm test
         env:
-          DATABASE_URL: "postgresql://test:test@localhost:5432/test_db"
-          NEXTAUTH_SECRET: "test-secret-key-minimum-32-characters"
-          NEXTAUTH_URL: "http://localhost:3000"
-          GROQ_API_KEY: "test-key"
-      
+          DATABASE_URL: 'postgresql://test:test@localhost:5432/test_db'
+          NEXTAUTH_SECRET: 'test-secret-key-minimum-32-characters'
+          NEXTAUTH_URL: 'http://localhost:3000'
+          GROQ_API_KEY: 'test-key'
+
       - name: Upload coverage
         uses: codecov/codecov-action@v3
         with:
@@ -110,19 +108,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run npm audit
         run: npm audit --audit-level=high
         continue-on-error: true
-      
+
       - name: Check for known vulnerabilities
         uses: snyk/actions/node@master
         continue-on-error: true
@@ -135,29 +133,29 @@ jobs:
     needs: [validate, lint, test]
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Generate Prisma clients
         run: npm run db:generate:all
         env:
-          SKIP_DB_CONNECTION: "true"
-          DATABASE_URL: "postgresql://test:test@localhost:5432/test_db"
-      
+          SKIP_DB_CONNECTION: 'true'
+          DATABASE_URL: 'postgresql://test:test@localhost:5432/test_db'
+
       - name: Build Next.js application
         run: npm run build
         env:
-          SKIP_DB_CONNECTION: "true"
-          DATABASE_URL: "postgresql://test:test@localhost:5432/test_db"
-          NEXTAUTH_SECRET: "build-time-secret-minimum-32-chars"
-          NEXTAUTH_URL: "http://localhost:3000"
-      
+          SKIP_DB_CONNECTION: 'true'
+          DATABASE_URL: 'postgresql://test:test@localhost:5432/test_db'
+          NEXTAUTH_SECRET: 'build-time-secret-minimum-32-chars'
+          NEXTAUTH_URL: 'http://localhost:3000'
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -171,16 +169,16 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Deploy to Railway
         uses: bervProject/railway-deploy@main
         with:
           railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: "medical-dashboard"
-      
+          service: 'medical-dashboard'
+
       - name: Wait for deployment
         run: sleep 30
-      
+
       - name: Health check
         run: |
           curl -f ${{ secrets.RAILWAY_URL }}/api/health || exit 1
@@ -190,33 +188,33 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: [build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Generate Prisma clients
         run: npm run db:generate:all
         env:
-          SKIP_DB_CONNECTION: "true"
-          DATABASE_URL: "file:./local.db"
-      
+          SKIP_DB_CONNECTION: 'true'
+          DATABASE_URL: 'file:./local.db'
+
       - name: Build desktop app
         run: npm run electron:build
         env:
-          SKIP_DB_CONNECTION: "true"
-      
+          SKIP_DB_CONNECTION: 'true'
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -230,4 +228,5 @@ jobs:
     if: always()
     steps:
       - name: Send notification
-        run: echo "Pipeline completed with status: ${{ job.status }}"
+        run: |
+          echo "Pipeline completed successfully"

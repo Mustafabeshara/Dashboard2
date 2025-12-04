@@ -3,27 +3,20 @@
  * Upload a ZIP file containing multiple tender PDFs for batch AI extraction
  */
 
-'use client'
+'use client';
 
-import { useState, useCallback } from 'react'
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Upload,
-  FileArchive,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  AlertCircle,
-  FileText,
-  Calendar,
-  Building2,
-  Eye,
-  Plus,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import {
   Table,
   TableBody,
@@ -31,158 +24,181 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
+  AlertCircle,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  Eye,
+  FileArchive,
+  FileText,
+  Loader2,
+  Plus,
+  Upload,
+  XCircle,
+} from 'lucide-react';
+import { useCallback, useState } from 'react';
 
 interface TenderItem {
-  itemDescription: string
-  quantity: number
-  unit: string
+  itemDescription: string;
+  quantity: number;
+  unit: string;
 }
 
 interface ExtractedTenderData {
-  reference: string
-  title: string
-  organization: string
-  closingDate: string
-  items: TenderItem[]
-  notes: string
+  reference: string;
+  title: string;
+  organization: string;
+  closingDate: string;
+  items: TenderItem[];
+  notes: string;
 }
 
 interface ExtractedTender {
-  fileName: string
-  documentId?: string
-  success: boolean
-  data?: ExtractedTenderData
-  error?: string
-  confidence?: number
+  fileName: string;
+  documentId?: string;
+  success: boolean;
+  data?: ExtractedTenderData;
+  error?: string;
+  confidence?: number;
 }
 
 interface BulkTenderUploadProps {
-  onComplete?: (results: ExtractedTender[]) => void
-  onCreateTender?: (tender: ExtractedTenderData) => void
+  onComplete?: (results: ExtractedTender[]) => void;
+  onCreateTender?: (tender: ExtractedTenderData) => void;
 }
 
 export function BulkTenderUpload({ onComplete, onCreateTender }: BulkTenderUploadProps) {
-  const [file, setFile] = useState<File | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [results, setResults] = useState<ExtractedTender[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [selectedTender, setSelectedTender] = useState<ExtractedTender | null>(null)
+  const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState<ExtractedTender[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedTender, setSelectedTender] = useState<ExtractedTender | null>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }, [])
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }, [])
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
+    e.preventDefault();
+    setIsDragging(false);
 
-    const droppedFile = e.dataTransfer.files[0]
+    const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
-      handleFileSelect(droppedFile)
+      handleFileSelect(droppedFile);
     }
-  }, [])
+  }, []);
 
   const handleFileSelect = (selectedFile: File) => {
-    setError(null)
-    setResults(null)
+    setError(null);
+    setResults(null);
 
     if (!selectedFile.name.toLowerCase().endsWith('.zip')) {
-      setError('Please select a ZIP file')
-      return
+      setError('Please select a ZIP file');
+      return;
     }
 
     if (selectedFile.size > 100 * 1024 * 1024) {
-      setError('File too large. Maximum size is 100MB')
-      return
+      setError('File too large. Maximum size is 100MB');
+      return;
     }
 
-    setFile(selectedFile)
-  }
+    setFile(selectedFile);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
+    const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      handleFileSelect(selectedFile)
+      handleFileSelect(selectedFile);
     }
-  }
+  };
 
   const handleUpload = async () => {
-    if (!file) return
+    if (!file) return;
 
-    setUploading(true)
-    setProgress(10)
-    setError(null)
+    setUploading(true);
+    setProgress(10);
+    setError(null);
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
+      const formData = new FormData();
+      formData.append('file', file);
 
-      setProgress(30)
+      setProgress(30);
 
       const response = await fetch('/api/tenders/bulk-upload', {
         method: 'POST',
         body: formData,
-      })
+      });
 
-      setProgress(80)
-
-      const result = await response.json()
+      setProgress(80);
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to process ZIP file')
+        const result = await response.json();
+        throw new Error(result.error || `Server error: ${response.status}`);
       }
 
-      setProgress(100)
-      setResults(result.results)
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Processing failed');
+      }
+
+      setProgress(100);
+      setResults(result.results);
+
+      // Success message is shown via the results UI
 
       if (onComplete) {
-        onComplete(result.results)
+        onComplete(result.results);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to process ZIP file')
+      console.error('Bulk upload error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to process ZIP file';
+      setError(
+        `Error: ${errorMessage}. Please check that your ZIP contains valid PDF, PNG, or JPG files.`
+      );
     } finally {
-      setUploading(false)
+      setUploading(false);
+      setProgress(0);
     }
-  }
+  };
 
   const handleCreateTender = (tender: ExtractedTender) => {
     if (tender.data && onCreateTender) {
-      onCreateTender(tender.data)
+      onCreateTender(tender.data);
     }
-  }
+  };
 
   const getConfidenceBadge = (confidence?: number) => {
-    if (!confidence) return null
-    
-    const percentage = Math.round(confidence * 100)
-    const variant = percentage >= 80 ? 'success' : percentage >= 50 ? 'warning' : 'destructive'
-    
+    if (!confidence) return null;
+
+    const percentage = Math.round(confidence * 100);
+    const variant = percentage >= 80 ? 'success' : percentage >= 50 ? 'warning' : 'destructive';
+
     return (
-      <Badge variant={variant === 'success' ? 'default' : variant === 'warning' ? 'secondary' : 'destructive'}>
+      <Badge
+        variant={
+          variant === 'success' ? 'default' : variant === 'warning' ? 'secondary' : 'destructive'
+        }
+      >
         {percentage}% confidence
       </Badge>
-    )
-  }
+    );
+  };
 
-  const successCount = results?.filter((r) => r.success).length || 0
-  const failCount = results?.filter((r) => !r.success).length || 0
+  const successCount = results?.filter(r => r.success).length || 0;
+  const failCount = results?.filter(r => !r.success).length || 0;
 
   return (
     <div className="space-y-6">
@@ -219,10 +235,7 @@ export function BulkTenderUpload({ onComplete, onCreateTender }: BulkTenderUploa
               id="zip-upload"
               disabled={uploading}
             />
-            <label
-              htmlFor="zip-upload"
-              className="cursor-pointer flex flex-col items-center gap-2"
-            >
+            <label htmlFor="zip-upload" className="cursor-pointer flex flex-col items-center gap-2">
               <Upload className="h-10 w-10 text-muted-foreground" />
               <div>
                 <p className="font-medium">Drop ZIP file here or click to browse</p>
@@ -480,5 +493,5 @@ export function BulkTenderUpload({ onComplete, onCreateTender }: BulkTenderUploa
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

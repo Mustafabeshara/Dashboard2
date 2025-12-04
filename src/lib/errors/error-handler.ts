@@ -27,8 +27,14 @@ export class AppError extends Error {
 /**
  * Specific error types
  */
+export interface ValidationDetail {
+  field: string;
+  message: string;
+  code?: string;
+}
+
 export class ValidationError extends AppError {
-  constructor(message: string, public details?: any) {
+  constructor(message: string, public details?: ValidationDetail[]) {
     super(400, message, true, 'VALIDATION_ERROR')
   }
 }
@@ -142,7 +148,7 @@ function handlePrismaError(error: Prisma.PrismaClientKnownRequestError): NextRes
 /**
  * Main error handler
  */
-export function handleError(error: unknown, context?: Record<string, any>): NextResponse {
+export function handleError(error: unknown, context?: Record<string, unknown>): NextResponse {
   // Log error with context
   if (error instanceof Error) {
     logger.error(`Error: ${error.message}`, error, context)

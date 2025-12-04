@@ -1,14 +1,8 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -16,14 +10,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -31,75 +34,71 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
+import { format } from 'date-fns';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  Receipt,
-  Plus,
-  Search,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  Loader2,
-  CheckCircle,
-  XCircle,
-  Clock,
-  DollarSign,
-  TrendingUp,
-  Filter,
-  Download,
-  FileText,
-  Eye,
-  Check,
-  X,
-  Sparkles,
   AlertTriangle,
   Brain,
-} from 'lucide-react'
-import { format } from 'date-fns'
+  Check,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  Download,
+  Edit,
+  Eye,
+  FileText,
+  Filter,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Receipt,
+  Search,
+  Sparkles,
+  Trash2,
+  TrendingUp,
+  X,
+  XCircle,
+} from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface Expense {
-  id: string
-  expenseNumber: string
-  description: string
-  amount: number
-  currency: string
-  category: string
-  subCategory: string | null
-  expenseDate: string
-  paymentMethod: string | null
-  vendorId: string | null
-  vendor: { name: string } | null
-  budgetCategoryId: string | null
-  budgetCategory: { id: string; name: string } | null
-  receiptUrl: string | null
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID'
-  createdBy: { id: string; fullName: string } | null
-  approvedBy: { id: string; fullName: string } | null
-  approvedDate: string | null
-  notes: string | null
-  createdAt: string
+  id: string;
+  expenseNumber: string;
+  description: string;
+  amount: number;
+  currency: string;
+  category: string;
+  subCategory: string | null;
+  expenseDate: string;
+  paymentMethod: string | null;
+  vendorId: string | null;
+  vendor: { name: string } | null;
+  budgetCategoryId: string | null;
+  budgetCategory: { id: string; name: string } | null;
+  receiptUrl: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID';
+  createdBy: { id: string; fullName: string } | null;
+  approvedBy: { id: string; fullName: string } | null;
+  approvedDate: string | null;
+  notes: string | null;
+  createdAt: string;
 }
 
 interface BudgetCategory {
-  id: string
-  name: string
-  allocatedAmount: number
-  spentAmount: number
+  id: string;
+  name: string;
+  allocatedAmount: number;
+  spentAmount: number;
 }
 
 interface Stats {
-  total: number
-  pending: number
-  approved: number
-  totalAmount: number
-  thisMonth: number
+  total: number;
+  pending: number;
+  approved: number;
+  totalAmount: number;
+  thisMonth: number;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -113,7 +112,7 @@ const EXPENSE_CATEGORIES = [
   { value: 'INSURANCE', label: 'Insurance' },
   { value: 'TAXES', label: 'Taxes & Fees' },
   { value: 'OTHER', label: 'Other' },
-]
+];
 
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Cash' },
@@ -121,7 +120,7 @@ const PAYMENT_METHODS = [
   { value: 'CREDIT_CARD', label: 'Credit Card' },
   { value: 'CHEQUE', label: 'Cheque' },
   { value: 'PETTY_CASH', label: 'Petty Cash' },
-]
+];
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -129,42 +128,45 @@ function StatusBadge({ status }: { status: string }) {
     APPROVED: 'bg-green-100 text-green-700 border-green-200',
     REJECTED: 'bg-red-100 text-red-700 border-red-200',
     PAID: 'bg-blue-100 text-blue-700 border-blue-200',
-  }
-  
+  };
+
   const icons: Record<string, React.ReactNode> = {
     PENDING: <Clock className="w-3 h-3" />,
     APPROVED: <CheckCircle className="w-3 h-3" />,
     REJECTED: <XCircle className="w-3 h-3" />,
     PAID: <DollarSign className="w-3 h-3" />,
-  }
+  };
 
   return (
     <Badge variant="outline" className={`${colors[status]} flex items-center gap-1`}>
       {icons[status]}
       {status}
     </Badge>
-  )
+  );
 }
 
 export default function ExpensesPage() {
-  const { data: session } = useSession()
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([])
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [categoryFilter, setCategoryFilter] = useState<string>('all')
-  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' })
-  
+  const { data: session } = useSession();
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
+    start: '',
+    end: '',
+  });
+
   // Dialog states
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [showEditDialog, setShowEditDialog] = useState(false)
-  const [showApproveDialog, setShowApproveDialog] = useState(false)
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
-  
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+
   // Form state
   const [formData, setFormData] = useState({
     description: '',
@@ -176,7 +178,7 @@ export default function ExpensesPage() {
     paymentMethod: '',
     budgetCategoryId: '',
     notes: '',
-  })
+  });
 
   // AI categorization state
   const [aiSuggestion, setAiSuggestion] = useState<{
@@ -185,74 +187,87 @@ export default function ExpensesPage() {
     reasoning: string;
     isAnomaly: boolean;
     anomalyDescription: string | null;
-  } | null>(null)
-  const [categorizingAI, setCategorizingAI] = useState(false)
+  } | null>(null);
+  const [categorizingAI, setCategorizingAI] = useState(false);
 
   // User permissions
-  const userRole = session?.user?.role
-  const canCreate = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER', 'SALES', 'WAREHOUSE', 'FINANCE'].includes(userRole || '')
-  const canApprove = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'].includes(userRole || '')
-  const canDelete = ['ADMIN', 'CEO', 'CFO'].includes(userRole || '')
+  const userRole = session?.user?.role;
+  const canCreate = [
+    'ADMIN',
+    'CEO',
+    'CFO',
+    'FINANCE_MANAGER',
+    'MANAGER',
+    'SALES',
+    'WAREHOUSE',
+    'FINANCE',
+  ].includes(userRole || '');
+  const canApprove = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'].includes(userRole || '');
+  const canDelete = ['ADMIN', 'CEO', 'CFO'].includes(userRole || '');
 
   const fetchExpenses = useCallback(async () => {
     try {
-      setLoading(true)
-      const params = new URLSearchParams()
-      if (search) params.append('search', search)
-      if (statusFilter !== 'all') params.append('status', statusFilter)
-      if (categoryFilter !== 'all') params.append('categoryId', categoryFilter)
-      if (dateRange.start) params.append('startDate', dateRange.start)
-      if (dateRange.end) params.append('endDate', dateRange.end)
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (categoryFilter !== 'all') params.append('categoryId', categoryFilter);
+      if (dateRange.start) params.append('startDate', dateRange.start);
+      if (dateRange.end) params.append('endDate', dateRange.end);
 
-      const response = await fetch(`/api/expenses?${params}`)
-      const result = await response.json()
+      const response = await fetch(`/api/expenses?${params}`);
+      const result = await response.json();
 
       if (result.data) {
-        setExpenses(result.data)
-        
+        setExpenses(result.data);
+
         // Calculate stats
-        const all = result.data
-        const pending = all.filter((e: Expense) => e.status === 'PENDING').length
-        const approved = all.filter((e: Expense) => e.status === 'APPROVED').length
-        const totalAmount = all.reduce((sum: number, e: Expense) => sum + Number(e.amount), 0)
-        const thisMonth = all.filter((e: Expense) => {
-          const expDate = new Date(e.expenseDate)
-          const now = new Date()
-          return expDate.getMonth() === now.getMonth() && expDate.getFullYear() === now.getFullYear()
-        }).reduce((sum: number, e: Expense) => sum + Number(e.amount), 0)
-        
-        setStats({ total: all.length, pending, approved, totalAmount, thisMonth })
+        const all = result.data;
+        const pending = all.filter((e: Expense) => e.status === 'PENDING').length;
+        const approved = all.filter((e: Expense) => e.status === 'APPROVED').length;
+        const totalAmount = all.reduce((sum: number, e: Expense) => sum + Number(e.amount), 0);
+        const thisMonth = all
+          .filter((e: Expense) => {
+            const expDate = new Date(e.expenseDate);
+            const now = new Date();
+            return (
+              expDate.getMonth() === now.getMonth() && expDate.getFullYear() === now.getFullYear()
+            );
+          })
+          .reduce((sum: number, e: Expense) => sum + Number(e.amount), 0);
+
+        setStats({ total: all.length, pending, approved, totalAmount, thisMonth });
       }
     } catch (error) {
-      console.error('Error fetching expenses:', error)
+      console.error('Error fetching expenses:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [search, statusFilter, categoryFilter, dateRange])
+  }, [search, statusFilter, categoryFilter, dateRange]);
 
   const fetchBudgetCategories = async () => {
     try {
-      const response = await fetch('/api/budgets/categories')
-      const result = await response.json()
+      const response = await fetch('/api/budgets/categories');
+      const result = await response.json();
       if (result.data) {
-        setBudgetCategories(result.data)
+        setBudgetCategories(result.data);
       }
     } catch (error) {
-      console.error('Error fetching budget categories:', error)
+      console.error('Error fetching budget categories:', error);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchExpenses()
-    fetchBudgetCategories()
-  }, [fetchExpenses])
+    fetchExpenses();
+    fetchBudgetCategories();
+  }, [fetchExpenses]);
 
   // AI Auto-categorization
   const handleAICategorize = async () => {
-    if (!formData.description || !formData.amount) return
+    if (!formData.description || !formData.amount) return;
 
-    setCategorizingAI(true)
-    setAiSuggestion(null)
+    setCategorizingAI(true);
+    setAiSuggestion(null);
 
     try {
       const response = await fetch('/api/expenses/categorize', {
@@ -263,10 +278,10 @@ export default function ExpensesPage() {
           amount: parseFloat(formData.amount),
           date: formData.expenseDate,
         }),
-      })
+      });
 
       if (response.ok) {
-        const result = await response.json()
+        const result = await response.json();
         if (result.success && result.data) {
           setAiSuggestion({
             category: result.data.category,
@@ -274,26 +289,26 @@ export default function ExpensesPage() {
             reasoning: result.data.reasoning,
             isAnomaly: result.data.anomalyDetection?.isAnomaly || false,
             anomalyDescription: result.data.anomalyDetection?.description || null,
-          })
+          });
         }
       }
     } catch (error) {
-      console.error('AI categorization error:', error)
+      console.error('AI categorization error:', error);
     } finally {
-      setCategorizingAI(false)
+      setCategorizingAI(false);
     }
-  }
+  };
 
   const applyAISuggestion = () => {
     if (aiSuggestion) {
-      setFormData(prev => ({ ...prev, category: aiSuggestion.category }))
+      setFormData(prev => ({ ...prev, category: aiSuggestion.category }));
     }
-  }
+  };
 
   const handleCreate = async () => {
-    if (!formData.description || !formData.amount) return
+    if (!formData.description || !formData.amount) return;
 
-    setSaving(true)
+    setSaving(true);
     try {
       const response = await fetch('/api/expenses', {
         method: 'POST',
@@ -303,25 +318,25 @@ export default function ExpensesPage() {
           amount: parseFloat(formData.amount),
           expenseDate: new Date(formData.expenseDate).toISOString(),
         }),
-      })
+      });
 
       if (response.ok) {
-        setShowCreateDialog(false)
-        resetForm()
-        setAiSuggestion(null)
-        fetchExpenses()
+        setShowCreateDialog(false);
+        resetForm();
+        setAiSuggestion(null);
+        fetchExpenses();
       }
     } catch (error) {
-      console.error('Error creating expense:', error)
+      console.error('Error creating expense:', error);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleUpdate = async () => {
-    if (!selectedExpense || !formData.description || !formData.amount) return
-    
-    setSaving(true)
+    if (!selectedExpense || !formData.description || !formData.amount) return;
+
+    setSaving(true);
     try {
       const response = await fetch(`/api/expenses/${selectedExpense.id}`, {
         method: 'PUT',
@@ -331,25 +346,25 @@ export default function ExpensesPage() {
           amount: parseFloat(formData.amount),
           expenseDate: new Date(formData.expenseDate).toISOString(),
         }),
-      })
+      });
 
       if (response.ok) {
-        setShowEditDialog(false)
-        setSelectedExpense(null)
-        resetForm()
-        fetchExpenses()
+        setShowEditDialog(false);
+        setSelectedExpense(null);
+        resetForm();
+        fetchExpenses();
       }
     } catch (error) {
-      console.error('Error updating expense:', error)
+      console.error('Error updating expense:', error);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleApprove = async (approved: boolean) => {
-    if (!selectedExpense) return
-    
-    setSaving(true)
+    if (!selectedExpense) return;
+
+    setSaving(true);
     try {
       const response = await fetch(`/api/expenses/${selectedExpense.id}`, {
         method: 'PUT',
@@ -357,40 +372,40 @@ export default function ExpensesPage() {
         body: JSON.stringify({
           status: approved ? 'APPROVED' : 'REJECTED',
         }),
-      })
+      });
 
       if (response.ok) {
-        setShowApproveDialog(false)
-        setSelectedExpense(null)
-        fetchExpenses()
+        setShowApproveDialog(false);
+        setSelectedExpense(null);
+        fetchExpenses();
       }
     } catch (error) {
-      console.error('Error approving expense:', error)
+      console.error('Error approving expense:', error);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleDelete = async () => {
-    if (!selectedExpense) return
-    
-    setSaving(true)
+    if (!selectedExpense) return;
+
+    setSaving(true);
     try {
       const response = await fetch(`/api/expenses/${selectedExpense.id}`, {
         method: 'DELETE',
-      })
+      });
 
       if (response.ok) {
-        setShowDeleteDialog(false)
-        setSelectedExpense(null)
-        fetchExpenses()
+        setShowDeleteDialog(false);
+        setSelectedExpense(null);
+        fetchExpenses();
       }
     } catch (error) {
-      console.error('Error deleting expense:', error)
+      console.error('Error deleting expense:', error);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -403,11 +418,11 @@ export default function ExpensesPage() {
       paymentMethod: '',
       budgetCategoryId: '',
       notes: '',
-    })
-  }
+    });
+  };
 
   const openEditDialog = (expense: Expense) => {
-    setSelectedExpense(expense)
+    setSelectedExpense(expense);
     setFormData({
       description: expense.description,
       amount: String(expense.amount),
@@ -418,12 +433,21 @@ export default function ExpensesPage() {
       paymentMethod: expense.paymentMethod || '',
       budgetCategoryId: expense.budgetCategoryId || '',
       notes: expense.notes || '',
-    })
-    setShowEditDialog(true)
-  }
+    });
+    setShowEditDialog(true);
+  };
 
   const exportToCSV = () => {
-    const headers = ['Number', 'Description', 'Amount', 'Currency', 'Category', 'Date', 'Status', 'Created By']
+    const headers = [
+      'Number',
+      'Description',
+      'Amount',
+      'Currency',
+      'Category',
+      'Date',
+      'Status',
+      'Created By',
+    ];
     const rows = expenses.map(e => [
       e.expenseNumber,
       e.description,
@@ -433,16 +457,16 @@ export default function ExpensesPage() {
       format(new Date(e.expenseDate), 'yyyy-MM-dd'),
       e.status,
       e.createdBy?.fullName || '-',
-    ])
-    
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `expenses-${format(new Date(), 'yyyy-MM-dd')}.csv`
-    a.click()
-  }
+    ]);
+
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `expenses-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+  };
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -540,7 +564,7 @@ export default function ExpensesPage() {
               <Input
                 placeholder="Search expenses..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={e => setSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -563,7 +587,9 @@ export default function ExpensesPage() {
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
                 {EXPENSE_CATEGORIES.map(cat => (
-                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  <SelectItem key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -571,13 +597,13 @@ export default function ExpensesPage() {
               <Input
                 type="date"
                 value={dateRange.start}
-                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                 className="w-full"
               />
               <Input
                 type="date"
                 value={dateRange.end}
-                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                 className="w-full"
               />
             </div>
@@ -597,7 +623,7 @@ export default function ExpensesPage() {
               <Receipt className="mx-auto h-12 w-12 text-muted-foreground" />
               <h3 className="mt-4 text-lg font-semibold">No expenses found</h3>
               <p className="text-muted-foreground mt-2">
-                {search || statusFilter !== 'all' 
+                {search || statusFilter !== 'all'
                   ? 'Try adjusting your filters'
                   : 'Get started by creating your first expense'}
               </p>
@@ -623,11 +649,9 @@ export default function ExpensesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {expenses.map((expense) => (
+                {expenses.map(expense => (
                   <TableRow key={expense.id}>
-                    <TableCell className="font-mono font-medium">
-                      {expense.expenseNumber}
-                    </TableCell>
+                    <TableCell className="font-mono font-medium">{expense.expenseNumber}</TableCell>
                     <TableCell>
                       <div className="max-w-[200px] truncate">{expense.description}</div>
                     </TableCell>
@@ -635,11 +659,12 @@ export default function ExpensesPage() {
                       <Badge variant="outline">{expense.category}</Badge>
                     </TableCell>
                     <TableCell className="font-medium">
-                      {expense.currency} {Number(expense.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {expense.currency}{' '}
+                      {Number(expense.amount).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
                     </TableCell>
-                    <TableCell>
-                      {format(new Date(expense.expenseDate), 'PP')}
-                    </TableCell>
+                    <TableCell>{format(new Date(expense.expenseDate), 'PP')}</TableCell>
                     <TableCell>
                       <StatusBadge status={expense.status} />
                     </TableCell>
@@ -659,10 +684,10 @@ export default function ExpensesPage() {
                             Edit
                           </DropdownMenuItem>
                           {canApprove && expense.status === 'PENDING' && (
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               onClick={() => {
-                                setSelectedExpense(expense)
-                                setShowApproveDialog(true)
+                                setSelectedExpense(expense);
+                                setShowApproveDialog(true);
                               }}
                             >
                               <CheckCircle className="mr-2 h-4 w-4" />
@@ -671,7 +696,11 @@ export default function ExpensesPage() {
                           )}
                           {expense.receiptUrl && (
                             <DropdownMenuItem asChild>
-                              <a href={expense.receiptUrl} target="_blank" rel="noopener noreferrer">
+                              <a
+                                href={expense.receiptUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
                                 <Eye className="mr-2 h-4 w-4" />
                                 View Receipt
                               </a>
@@ -679,11 +708,11 @@ export default function ExpensesPage() {
                           )}
                           <DropdownMenuSeparator />
                           {canDelete && (
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               className="text-red-600"
                               onClick={() => {
-                                setSelectedExpense(expense)
-                                setShowDeleteDialog(true)
+                                setSelectedExpense(expense);
+                                setShowDeleteDialog(true);
                               }}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
@@ -702,26 +731,27 @@ export default function ExpensesPage() {
       </Card>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={showCreateDialog || showEditDialog} onOpenChange={(open) => {
-        if (!open) {
-          setShowCreateDialog(false)
-          setShowEditDialog(false)
-          setSelectedExpense(null)
-          resetForm()
-        }
-      }}>
+      <Dialog
+        open={showCreateDialog || showEditDialog}
+        onOpenChange={open => {
+          if (!open) {
+            setShowCreateDialog(false);
+            setShowEditDialog(false);
+            setSelectedExpense(null);
+            resetForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {showEditDialog ? 'Edit Expense' : 'Add New Expense'}
-            </DialogTitle>
+            <DialogTitle>{showEditDialog ? 'Edit Expense' : 'Add New Expense'}</DialogTitle>
             <DialogDescription>
-              {showEditDialog 
+              {showEditDialog
                 ? 'Update the expense details below'
                 : 'Fill in the expense details. Fields marked with * are required.'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -729,7 +759,7 @@ export default function ExpensesPage() {
                 <Input
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Expense description"
                 />
               </div>
@@ -756,14 +786,16 @@ export default function ExpensesPage() {
                 </div>
                 <Select
                   value={formData.category}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
+                  onValueChange={v => setFormData(prev => ({ ...prev, category: v }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {EXPENSE_CATEGORIES.map(cat => (
-                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -772,7 +804,9 @@ export default function ExpensesPage() {
 
             {/* AI Suggestion Panel */}
             {aiSuggestion && !showEditDialog && (
-              <div className={`p-3 rounded-lg border ${aiSuggestion.isAnomaly ? 'bg-yellow-50 border-yellow-200' : 'bg-purple-50 border-purple-200'}`}>
+              <div
+                className={`p-3 rounded-lg border ${aiSuggestion.isAnomaly ? 'bg-yellow-50 border-yellow-200' : 'bg-purple-50 border-purple-200'}`}
+              >
                 <div className="flex items-start gap-2">
                   {aiSuggestion.isAnomaly ? (
                     <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
@@ -782,7 +816,8 @@ export default function ExpensesPage() {
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium">
-                        AI suggests: <span className="text-purple-700">{aiSuggestion.category}</span>
+                        AI suggests:{' '}
+                        <span className="text-purple-700">{aiSuggestion.category}</span>
                         <span className="ml-2 text-xs text-muted-foreground">
                           ({aiSuggestion.confidence}% confidence)
                         </span>
@@ -816,15 +851,15 @@ export default function ExpensesPage() {
                   type="number"
                   step="0.01"
                   value={formData.amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                   placeholder="0.00"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
-                <Select 
-                  value={formData.currency} 
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, currency: v }))}
+                <Select
+                  value={formData.currency}
+                  onValueChange={v => setFormData(prev => ({ ...prev, currency: v }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -843,7 +878,7 @@ export default function ExpensesPage() {
                   id="expenseDate"
                   type="date"
                   value={formData.expenseDate}
-                  onChange={(e) => setFormData(prev => ({ ...prev, expenseDate: e.target.value }))}
+                  onChange={e => setFormData(prev => ({ ...prev, expenseDate: e.target.value }))}
                 />
               </div>
             </div>
@@ -851,33 +886,39 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="paymentMethod">Payment Method</Label>
-                <Select 
-                  value={formData.paymentMethod} 
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, paymentMethod: v }))}
+                <Select
+                  value={formData.paymentMethod}
+                  onValueChange={v => setFormData(prev => ({ ...prev, paymentMethod: v }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select payment method" />
                   </SelectTrigger>
                   <SelectContent>
                     {PAYMENT_METHODS.map(pm => (
-                      <SelectItem key={pm.value} value={pm.value}>{pm.label}</SelectItem>
+                      <SelectItem key={pm.value} value={pm.value}>
+                        {pm.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="budgetCategory">Budget Category</Label>
-                <Select 
-                  value={formData.budgetCategoryId} 
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, budgetCategoryId: v }))}
+                <Select
+                  value={formData.budgetCategoryId || 'none'}
+                  onValueChange={v =>
+                    setFormData(prev => ({ ...prev, budgetCategoryId: v === 'none' ? '' : v }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Link to budget (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {budgetCategories.map(bc => (
-                      <SelectItem key={bc.id} value={bc.id}>{bc.name}</SelectItem>
+                      <SelectItem key={bc.id} value={bc.id}>
+                        {bc.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -889,7 +930,7 @@ export default function ExpensesPage() {
               <Textarea
                 id="notes"
                 value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                 placeholder="Additional notes or details..."
                 rows={3}
               />
@@ -897,19 +938,19 @@ export default function ExpensesPage() {
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
-                setShowCreateDialog(false)
-                setShowEditDialog(false)
-                setSelectedExpense(null)
-                resetForm()
+                setShowCreateDialog(false);
+                setShowEditDialog(false);
+                setSelectedExpense(null);
+                resetForm();
               }}
             >
               Cancel
             </Button>
-            <Button 
-              onClick={showEditDialog ? handleUpdate : handleCreate} 
+            <Button
+              onClick={showEditDialog ? handleUpdate : handleCreate}
               disabled={saving || !formData.description || !formData.amount}
             >
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -928,7 +969,7 @@ export default function ExpensesPage() {
               Review the expense details and approve or reject it.
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedExpense && (
             <div className="space-y-4 py-4">
               <div className="bg-gray-50 p-4 rounded-lg space-y-2">
@@ -962,20 +1003,24 @@ export default function ExpensesPage() {
             <Button variant="outline" onClick={() => setShowApproveDialog(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
-              onClick={() => handleApprove(false)}
-              disabled={saving}
-            >
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
+            <Button variant="destructive" onClick={() => handleApprove(false)} disabled={saving}>
+              {saving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <X className="mr-2 h-4 w-4" />
+              )}
               Reject
             </Button>
-            <Button 
+            <Button
               onClick={() => handleApprove(true)}
               disabled={saving}
               className="bg-green-600 hover:bg-green-700"
             >
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+              {saving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
               Approve
             </Button>
           </DialogFooter>
@@ -991,7 +1036,7 @@ export default function ExpensesPage() {
               Are you sure you want to delete this expense? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedExpense && (
             <div className="py-4">
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -1016,5 +1061,5 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

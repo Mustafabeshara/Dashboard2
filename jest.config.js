@@ -22,6 +22,13 @@ const customJestConfig = {
     '**/__tests__/**/*.(test|spec).[jt]s?(x)',
     '**/?(*.)+(test|spec).[jt]s?(x)',
   ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/docs-reference/', // Vitest tests, not Jest
+  ],
+  transformIgnorePatterns: [
+    '/node_modules/(?!(jose|openid-client|@panva)/)',
+  ],
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
     '!src/**/*.d.ts',

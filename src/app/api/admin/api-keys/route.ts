@@ -4,23 +4,36 @@
  */
 
 import { clearApiKeyCache } from '@/lib/ai/api-keys';
-import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
-import { getServerSession } from 'next-auth';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { withAuth, AuthenticatedRequest, RoleGroups } from '@/lib/middleware/with-auth';
+import { ApiResponse, BadRequest, InternalError } from '@/lib/api';
+import { logger } from '@/lib/logger';
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rate-limit';
+import { z } from 'zod';
 
 // Encryption helpers using AES-256-GCM with random salt per encryption
-const ENCRYPTION_KEY = process.env.NEXTAUTH_SECRET || 'fallback-key-for-development-only';
 const ALGORITHM = 'aes-256-gcm';
 
+function getEncryptionKey(): string {
+  const key = process.env.NEXTAUTH_SECRET;
+  if (!key) {
+    throw new Error('NEXTAUTH_SECRET environment variable is required for encryption');
+  }
+  if (key.length < 32) {
+    throw new Error('NEXTAUTH_SECRET must be at least 32 characters long');
+  }
+  return key;
+}
+
 function getKey(salt: Buffer): Buffer {
-  return scryptSync(ENCRYPTION_KEY, salt, 32);
+  return scryptSync(getEncryptionKey(), salt, 32);
 }
 
 function encrypt(text: string): string {
   const iv = randomBytes(16);
-  const salt = randomBytes(32); // Generate random salt for each encryption
+  const salt = randomBytes(32);
   const key = getKey(salt);
   const cipher = createCipheriv(ALGORITHM, key, iv);
 
@@ -29,13 +42,21 @@ function encrypt(text: string): string {
 
   const authTag = cipher.getAuthTag();
 
-  // Return salt:iv:authTag:encrypted
   return `${salt.toString('hex')}:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
 }
 
 function decrypt(encryptedData: string): string {
   try {
-    const [saltHex, ivHex, authTagHex, encrypted] = encryptedData.split(':');
+    const parts = encryptedData.split(':');
+    if (parts.length !== 4) {
+      logger.error('Decryption failed: Invalid encrypted data format', undefined, {
+        expectedParts: 4,
+        actualParts: parts.length,
+      });
+      return '';
+    }
+
+    const [saltHex, ivHex, authTagHex, encrypted] = parts;
 
     const salt = Buffer.from(saltHex, 'hex');
     const iv = Buffer.from(ivHex, 'hex');
@@ -49,18 +70,17 @@ function decrypt(encryptedData: string): string {
     decrypted += decipher.final('utf8');
 
     return decrypted;
-  } catch {
+  } catch (error) {
+    logger.error('Decryption failed', error instanceof Error ? error : new Error('Unknown error'));
     return '';
   }
 }
 
-// Mask API key for display (show first 4 and last 4 chars)
 function maskKey(key: string): string {
   if (!key || key.length < 12) return '••••••••';
   return `${key.slice(0, 4)}${'•'.repeat(Math.min(key.length - 8, 20))}${key.slice(-4)}`;
 }
 
-// API key setting interface
 interface ApiKeySetting {
   key: string;
   label: string;
@@ -69,118 +89,41 @@ interface ApiKeySetting {
   isSecret?: boolean;
 }
 
-// Valid API key settings
 const API_KEY_SETTINGS: ApiKeySetting[] = [
   // AI Providers
-  {
-    key: 'GROQ_API_KEY',
-    label: 'Groq API Key',
-    description: 'Primary AI provider for fast extraction',
-    category: 'ai',
-  },
-  {
-    key: 'GEMINI_API_KEY',
-    label: 'Gemini API Key',
-    description: 'Google Gemini for vision/PDF processing',
-    category: 'ai',
-  },
-  {
-    key: 'OPENAI_API_KEY',
-    label: 'OpenAI API Key',
-    description: 'OpenAI fallback provider',
-    category: 'ai',
-  },
-  {
-    key: 'ANTHROPIC_API_KEY',
-    label: 'Anthropic API Key',
-    description: 'Claude AI fallback provider',
-    category: 'ai',
-  },
+  { key: 'GROQ_API_KEY', label: 'Groq API Key', description: 'Primary AI provider for fast extraction', category: 'ai' },
+  { key: 'GEMINI_API_KEY', label: 'Gemini API Key', description: 'Google Gemini for vision/PDF processing', category: 'ai' },
+  { key: 'OPENAI_API_KEY', label: 'OpenAI API Key', description: 'OpenAI fallback provider', category: 'ai' },
+  { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', description: 'Claude AI fallback provider', category: 'ai' },
   // OCR Providers
-  {
-    key: 'GOOGLE_VISION_API_KEY',
-    label: 'Google Vision API Key',
-    description: 'Google Cloud Vision for OCR (scanned documents)',
-    category: 'ocr',
-  },
-  {
-    key: 'AWS_ACCESS_KEY_ID',
-    label: 'AWS Access Key ID',
-    description: 'AWS Textract for OCR',
-    category: 'ocr',
-  },
-  {
-    key: 'AWS_SECRET_ACCESS_KEY',
-    label: 'AWS Secret Key',
-    description: 'AWS secret access key',
-    category: 'ocr',
-  },
-  {
-    key: 'AWS_REGION',
-    label: 'AWS Region',
-    description: 'AWS region (e.g., us-east-1)',
-    isSecret: false,
-    category: 'ocr',
-  },
+  { key: 'GOOGLE_VISION_API_KEY', label: 'Google Vision API Key', description: 'Google Cloud Vision for OCR', category: 'ocr' },
+  { key: 'AWS_ACCESS_KEY_ID', label: 'AWS Access Key ID', description: 'AWS Textract for OCR', category: 'ocr' },
+  { key: 'AWS_SECRET_ACCESS_KEY', label: 'AWS Secret Key', description: 'AWS secret access key', category: 'ocr' },
+  { key: 'AWS_REGION', label: 'AWS Region', description: 'AWS region (e.g., us-east-1)', isSecret: false, category: 'ocr' },
   // Email Configuration
-  {
-    key: 'EMAIL_HOST',
-    label: 'SMTP Host',
-    description: 'Email server hostname (e.g., smtp.mail.yahoo.com)',
-    isSecret: false,
-    category: 'email',
-  },
-  {
-    key: 'EMAIL_PORT',
-    label: 'SMTP Port',
-    description: 'Email server port (587 for TLS, 465 for SSL)',
-    isSecret: false,
-    category: 'email',
-  },
-  {
-    key: 'EMAIL_USER',
-    label: 'Email Username',
-    description: 'Your email address for authentication',
-    isSecret: false,
-    category: 'email',
-  },
-  {
-    key: 'EMAIL_PASSWORD',
-    label: 'Email App Password',
-    description: 'App-specific password (not your regular password)',
-    category: 'email',
-  },
-  {
-    key: 'EMAIL_FROM',
-    label: 'From Address',
-    description: 'Sender email address for notifications',
-    isSecret: false,
-    category: 'email',
-  },
+  { key: 'EMAIL_HOST', label: 'SMTP Host', description: 'Email server hostname', isSecret: false, category: 'email' },
+  { key: 'EMAIL_PORT', label: 'SMTP Port', description: 'Email server port', isSecret: false, category: 'email' },
+  { key: 'EMAIL_USER', label: 'Email Username', description: 'Your email address', isSecret: false, category: 'email' },
+  { key: 'EMAIL_PASSWORD', label: 'Email App Password', description: 'App-specific password', category: 'email' },
+  { key: 'EMAIL_FROM', label: 'From Address', description: 'Sender email address', isSecret: false, category: 'email' },
 ];
 
-export async function GET() {
+const apiKeySchema = z.object({
+  key: z.string().min(1),
+  value: z.string(),
+});
+
+const rateLimiter = rateLimit(RateLimitPresets.strict);
+
+async function handleGet(request: AuthenticatedRequest) {
+  const rateLimitResponse = await rateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Allow management roles to view API keys
-    const allowedRoles = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'];
-    if (!allowedRoles.includes(session.user.role)) {
-      return NextResponse.json({ error: 'Forbidden - requires management role' }, { status: 403 });
-    }
-
-    // Get all API key settings from database
     const settings = await prisma.appSettings.findMany({
-      where: {
-        key: { in: API_KEY_SETTINGS.map(s => s.key) },
-      },
+      where: { key: { in: API_KEY_SETTINGS.map(s => s.key) } },
     });
 
-    // Build response with masked keys
-    // PRIORITY: Check environment first (Railway), then database
     const response = API_KEY_SETTINGS.map(setting => {
       const dbSetting = settings.find(s => s.key === setting.key);
       const envValue = process.env[setting.key];
@@ -188,26 +131,21 @@ export async function GET() {
       let value = '';
       let source: 'database' | 'environment' | 'not_set' = 'not_set';
       let masked = '';
-
-      // Check if this field should be treated as secret (default true)
       const isSecretField = setting.isSecret !== false;
 
-      // PRIORITY 1: Check environment variable first (Railway/production)
       if (envValue && envValue.length > 0) {
-        // Don't show placeholder values
         const lowerEnv = envValue.toLowerCase();
         const isPlaceholder = ['your-', 'placeholder', 'changeme', 'example', 'test-'].some(p =>
           lowerEnv.includes(p)
         );
 
-        if (!isPlaceholder && envValue.length > 0) {
+        if (!isPlaceholder) {
           value = envValue;
           source = 'environment';
           masked = isSecretField ? maskKey(envValue) : envValue;
         }
       }
 
-      // PRIORITY 2: Fall back to database if no valid environment variable
       if (!value && dbSetting) {
         const decrypted = dbSetting.isEncrypted ? decrypt(dbSetting.value) : dbSetting.value;
         if (decrypted && decrypted.length > 0) {
@@ -229,102 +167,82 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ settings: response });
+    logger.info('API keys fetched', { context: { userId: request.user.id } });
+    return ApiResponse({ settings: response });
   } catch (error) {
-    console.error('Error fetching API keys:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    logger.error('Error fetching API keys', error as Error, { userId: request.user.id });
+    return InternalError('Failed to fetch API keys');
   }
 }
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: AuthenticatedRequest) {
+  const rateLimitResponse = await rateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Allow management roles to update API keys
-    const allowedRoles = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'];
-    if (!allowedRoles.includes(session.user.role)) {
-      return NextResponse.json({ error: 'Forbidden - requires management role' }, { status: 403 });
-    }
-
     const body = await request.json();
-    const { key, value } = body;
+    const parseResult = apiKeySchema.safeParse(body);
 
-    // Validate the key is allowed
+    if (!parseResult.success) {
+      return BadRequest('Invalid request body');
+    }
+
+    const { key, value } = parseResult.data;
+
     const settingConfig = API_KEY_SETTINGS.find(s => s.key === key);
     if (!settingConfig) {
-      return NextResponse.json({ error: 'Invalid setting key' }, { status: 400 });
+      return BadRequest('Invalid setting key');
     }
 
-    // Delete if value is empty
     if (!value || value.trim() === '') {
       await prisma.appSettings.deleteMany({ where: { key } });
-      return NextResponse.json({ success: true, message: 'API key removed' });
+      clearApiKeyCache();
+      logger.info('API key removed', { context: { userId: request.user.id, key } });
+      return ApiResponse({ success: true, message: 'API key removed' });
     }
 
-    // Encrypt sensitive values (check if field has isSecret: false explicitly)
     const isSecret = settingConfig.isSecret !== false;
     const storedValue = isSecret ? encrypt(value) : value;
 
-    // Upsert the setting
     await prisma.appSettings.upsert({
       where: { key },
-      create: {
-        key,
-        value: storedValue,
-        isEncrypted: isSecret,
-        description: settingConfig.description,
-      },
-      update: {
-        value: storedValue,
-        isEncrypted: isSecret,
-      },
+      create: { key, value: storedValue, isEncrypted: isSecret, description: settingConfig.description },
+      update: { value: storedValue, isEncrypted: isSecret },
     });
 
-    // Clear the API key cache so new key is used immediately
     clearApiKeyCache();
 
-    return NextResponse.json({
-      success: true,
-      message: 'API key saved',
-      maskedValue: isSecret ? maskKey(value) : value,
-    });
+    logger.info('API key saved', { context: { userId: request.user.id, key } });
+    return ApiResponse({ success: true, message: 'API key saved', maskedValue: isSecret ? maskKey(value) : value });
   } catch (error) {
-    console.error('Error saving API key:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: `Failed to save: ${errorMessage}` }, { status: 500 });
+    logger.error('Error saving API key', error as Error, { userId: request.user.id });
+    return InternalError('Failed to save API key');
   }
 }
 
-export async function DELETE(request: NextRequest) {
+async function handleDelete(request: AuthenticatedRequest) {
+  const rateLimitResponse = await rateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const allowedRoles = ['ADMIN', 'CEO', 'CFO', 'FINANCE_MANAGER', 'MANAGER'];
-    if (!allowedRoles.includes(session.user.role)) {
-      return NextResponse.json({ error: 'Forbidden - requires management role' }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
 
     if (!key || !API_KEY_SETTINGS.find(s => s.key === key)) {
-      return NextResponse.json({ error: 'Invalid key' }, { status: 400 });
+      return BadRequest('Invalid key');
     }
 
     await prisma.appSettings.deleteMany({ where: { key } });
-
-    // Clear the API key cache
     clearApiKeyCache();
 
-    return NextResponse.json({ success: true, message: 'API key removed' });
+    logger.info('API key deleted', { context: { userId: request.user.id, key } });
+    return ApiResponse({ success: true, message: 'API key removed' });
   } catch (error) {
-    console.error('Error deleting API key:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    logger.error('Error deleting API key', error as Error, { userId: request.user.id });
+    return InternalError('Failed to delete API key');
   }
 }
+
+export const GET = withAuth(handleGet, { roleGroup: 'MANAGEMENT' });
+export const POST = withAuth(handlePost, { roleGroup: 'MANAGEMENT' });
+export const DELETE = withAuth(handleDelete, { roleGroup: 'MANAGEMENT' });

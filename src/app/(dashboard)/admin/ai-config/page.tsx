@@ -1,41 +1,67 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Plus, Edit, Trash2, Brain, RefreshCw, ArrowUp, ArrowDown, Check, X } from 'lucide-react'
-import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Brain, Check, Edit, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 interface AIProvider {
-  id: string
-  provider: string
-  name: string
-  model: string
-  priority: number
-  isEnabled: boolean
-  rateLimit: number | null
-  dailyLimit: number | null
-  usageCount: number
-  lastUsed: string | null
-  capabilities: string[] | null
-  hasApiKey: boolean
+  id: string;
+  provider: string;
+  name: string;
+  model: string;
+  priority: number;
+  isEnabled: boolean;
+  rateLimit: number | null;
+  dailyLimit: number | null;
+  usageCount: number;
+  lastUsed: string | null;
+  capabilities: string[] | null;
+  hasApiKey: boolean;
 }
 
 const PROVIDER_OPTIONS = [
-  { value: 'groq', label: 'Groq', models: ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'] },
+  {
+    value: 'groq',
+    label: 'Groq',
+    models: ['llama-3.1-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
+  },
   { value: 'gemini', label: 'Google Gemini', models: ['gemini-2.0-flash', 'gemini-2.0-flash-exp'] },
-  { value: 'google_ai', label: 'Google AI Studio', models: ['gemini-2.0-flash', 'gemini-2.0-flash-exp'] },
-  { value: 'anthropic', label: 'Anthropic Claude', models: ['claude-3-haiku-20240307', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'] },
+  {
+    value: 'google_ai',
+    label: 'Google AI Studio',
+    models: ['gemini-2.0-flash', 'gemini-2.0-flash-exp'],
+  },
+  {
+    value: 'anthropic',
+    label: 'Anthropic Claude',
+    models: ['claude-3-haiku-20240307', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
+  },
   { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'] },
-]
+];
 
 const CAPABILITY_OPTIONS = [
   'vision',
@@ -44,16 +70,16 @@ const CAPABILITY_OPTIONS = [
   'summarization',
   'translation',
   'complex_analysis',
-]
+];
 
 export default function AdminAIConfigPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  const [providers, setProviders] = useState<AIProvider[]>([])
-  const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingProvider, setEditingProvider] = useState<AIProvider | null>(null)
-  const [saving, setSaving] = useState(false)
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [providers, setProviders] = useState<AIProvider[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<AIProvider | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     provider: 'groq',
@@ -65,76 +91,76 @@ export default function AdminAIConfigPage() {
     rateLimit: 30,
     dailyLimit: 1000,
     capabilities: [] as string[],
-  })
+  });
 
   useEffect(() => {
     if (status === 'authenticated' && session?.user?.role !== 'ADMIN') {
-      router.push('/dashboard')
+      router.push('/dashboard');
     }
-  }, [session, status, router])
+  }, [session, status, router]);
 
   useEffect(() => {
-    fetchProviders()
-  }, [])
+    fetchProviders();
+  }, []);
 
   const fetchProviders = async () => {
     try {
-      const response = await fetch('/api/admin/ai-providers')
+      const response = await fetch('/api/admin/ai-providers');
       if (response.ok) {
-        const data = await response.json()
-        setProviders(data.providers)
+        const data = await response.json();
+        setProviders(data.providers);
       }
     } catch (error) {
-      console.error('Error fetching providers:', error)
-      toast.error('Failed to fetch AI providers')
+      console.error('Error fetching providers:', error);
+      toast.error('Failed to fetch AI providers');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleProviderChange = (provider: string) => {
-    const providerInfo = PROVIDER_OPTIONS.find(p => p.value === provider)
+    const providerInfo = PROVIDER_OPTIONS.find(p => p.value === provider);
     setFormData(prev => ({
       ...prev,
       provider,
       name: providerInfo?.label || provider,
       model: providerInfo?.models[0] || '',
-    }))
-  }
+    }));
+  };
 
   const handleSave = async () => {
     if (!formData.name || !formData.model) {
-      toast.error('Name and model are required')
-      return
+      toast.error('Name and model are required');
+      return;
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
       const response = await fetch('/api/admin/ai-providers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
-      })
+      });
 
       if (response.ok) {
-        toast.success(editingProvider ? 'Provider updated' : 'Provider created')
-        setDialogOpen(false)
-        setEditingProvider(null)
-        resetForm()
-        fetchProviders()
+        toast.success(editingProvider ? 'Provider updated' : 'Provider created');
+        setDialogOpen(false);
+        setEditingProvider(null);
+        resetForm();
+        fetchProviders();
       } else {
-        toast.error('Failed to save provider')
+        toast.error('Failed to save provider');
       }
     } catch (error) {
-      console.error('Error saving provider:', error)
-      toast.error('Failed to save provider')
+      console.error('Error saving provider:', error);
+      toast.error('Failed to save provider');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleEdit = (provider: AIProvider) => {
-    setEditingProvider(provider)
+    setEditingProvider(provider);
     setFormData({
       provider: provider.provider,
       name: provider.name,
@@ -145,29 +171,29 @@ export default function AdminAIConfigPage() {
       rateLimit: provider.rateLimit || 30,
       dailyLimit: provider.dailyLimit || 1000,
       capabilities: provider.capabilities || [],
-    })
-    setDialogOpen(true)
-  }
+    });
+    setDialogOpen(true);
+  };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this provider?')) return
+    if (!confirm('Are you sure you want to delete this provider?')) return;
 
     try {
       const response = await fetch(`/api/admin/ai-providers?id=${id}`, {
         method: 'DELETE',
-      })
+      });
 
       if (response.ok) {
-        toast.success('Provider deleted')
-        fetchProviders()
+        toast.success('Provider deleted');
+        fetchProviders();
       } else {
-        toast.error('Failed to delete provider')
+        toast.error('Failed to delete provider');
       }
     } catch (error) {
-      console.error('Error deleting provider:', error)
-      toast.error('Failed to delete provider')
+      console.error('Error deleting provider:', error);
+      toast.error('Failed to delete provider');
     }
-  }
+  };
 
   const toggleCapability = (cap: string) => {
     setFormData(prev => ({
@@ -175,8 +201,8 @@ export default function AdminAIConfigPage() {
       capabilities: prev.capabilities.includes(cap)
         ? prev.capabilities.filter(c => c !== cap)
         : [...prev.capabilities, cap],
-    }))
-  }
+    }));
+  };
 
   const resetForm = () => {
     setFormData({
@@ -189,19 +215,19 @@ export default function AdminAIConfigPage() {
       rateLimit: 30,
       dailyLimit: 1000,
       capabilities: [],
-    })
-  }
+    });
+  };
 
   const getProviderModels = (provider: string) => {
-    return PROVIDER_OPTIONS.find(p => p.value === provider)?.models || []
-  }
+    return PROVIDER_OPTIONS.find(p => p.value === provider)?.models || [];
+  };
 
   if (status === 'loading' || loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
-    )
+    );
   }
 
   if (session?.user?.role !== 'ADMIN') {
@@ -209,7 +235,7 @@ export default function AdminAIConfigPage() {
       <div className="flex items-center justify-center h-64">
         <p className="text-muted-foreground">Access denied. Admin role required.</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -226,13 +252,16 @@ export default function AdminAIConfigPage() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Dialog open={dialogOpen} onOpenChange={(open) => {
-            setDialogOpen(open)
-            if (!open) {
-              setEditingProvider(null)
-              resetForm()
-            }
-          }}>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={open => {
+              setDialogOpen(open);
+              if (!open) {
+                setEditingProvider(null);
+                resetForm();
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
@@ -255,7 +284,7 @@ export default function AdminAIConfigPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {PROVIDER_OPTIONS.map((p) => (
+                        {PROVIDER_OPTIONS.map(p => (
                           <SelectItem key={p.value} value={p.value}>
                             {p.label}
                           </SelectItem>
@@ -265,12 +294,15 @@ export default function AdminAIConfigPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Model</Label>
-                    <Select value={formData.model} onValueChange={(m) => setFormData(prev => ({ ...prev, model: m }))}>
+                    <Select
+                      value={formData.model}
+                      onValueChange={m => setFormData(prev => ({ ...prev, model: m }))}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {getProviderModels(formData.provider).map((m) => (
+                        {getProviderModels(formData.provider).map(m => (
                           <SelectItem key={m} value={m}>
                             {m}
                           </SelectItem>
@@ -283,7 +315,7 @@ export default function AdminAIConfigPage() {
                   <Label>Display Name</Label>
                   <Input
                     value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Groq (Primary)"
                   />
                 </div>
@@ -292,11 +324,13 @@ export default function AdminAIConfigPage() {
                   <Input
                     type="password"
                     value={formData.apiKey}
-                    onChange={(e) => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
+                    onChange={e => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
                     placeholder={editingProvider?.hasApiKey ? '••••••••' : 'Enter API key'}
                   />
                   {editingProvider?.hasApiKey && (
-                    <p className="text-xs text-muted-foreground">Leave blank to keep existing key</p>
+                    <p className="text-xs text-muted-foreground">
+                      Leave blank to keep existing key
+                    </p>
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-4">
@@ -306,7 +340,9 @@ export default function AdminAIConfigPage() {
                       type="number"
                       min="1"
                       value={formData.priority}
-                      onChange={(e) => setFormData(prev => ({ ...prev, priority: Number(e.target.value) }))}
+                      onChange={e =>
+                        setFormData(prev => ({ ...prev, priority: Number(e.target.value) }))
+                      }
                     />
                     <p className="text-xs text-muted-foreground">Lower = higher priority</p>
                   </div>
@@ -316,7 +352,9 @@ export default function AdminAIConfigPage() {
                       type="number"
                       min="1"
                       value={formData.rateLimit}
-                      onChange={(e) => setFormData(prev => ({ ...prev, rateLimit: Number(e.target.value) }))}
+                      onChange={e =>
+                        setFormData(prev => ({ ...prev, rateLimit: Number(e.target.value) }))
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -325,14 +363,16 @@ export default function AdminAIConfigPage() {
                       type="number"
                       min="1"
                       value={formData.dailyLimit}
-                      onChange={(e) => setFormData(prev => ({ ...prev, dailyLimit: Number(e.target.value) }))}
+                      onChange={e =>
+                        setFormData(prev => ({ ...prev, dailyLimit: Number(e.target.value) }))
+                      }
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Capabilities</Label>
                   <div className="flex flex-wrap gap-2">
-                    {CAPABILITY_OPTIONS.map((cap) => (
+                    {CAPABILITY_OPTIONS.map(cap => (
                       <Badge
                         key={cap}
                         variant={formData.capabilities.includes(cap) ? 'default' : 'outline'}
@@ -348,7 +388,9 @@ export default function AdminAIConfigPage() {
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={formData.isEnabled}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isEnabled: checked }))}
+                    onCheckedChange={checked =>
+                      setFormData(prev => ({ ...prev, isEnabled: checked }))
+                    }
                   />
                   <Label>Enabled</Label>
                 </div>
@@ -378,7 +420,9 @@ export default function AdminAIConfigPage() {
             <div className="flex flex-col items-center justify-center py-12">
               <Brain className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">No AI providers configured</p>
-              <p className="text-sm text-muted-foreground">Add a provider to enable AI extraction</p>
+              <p className="text-sm text-muted-foreground">
+                Add a provider to enable AI extraction
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -411,7 +455,9 @@ export default function AdminAIConfigPage() {
                             </Badge>
                           )}
                           {provider.hasApiKey ? (
-                            <Badge variant="outline" className="text-green-600">API Key Set</Badge>
+                            <Badge variant="outline" className="text-green-600">
+                              API Key Set
+                            </Badge>
                           ) : (
                             <Badge variant="destructive">No API Key</Badge>
                           )}
@@ -421,7 +467,7 @@ export default function AdminAIConfigPage() {
                         </p>
                         {provider.capabilities && provider.capabilities.length > 0 && (
                           <div className="flex gap-1 mt-1">
-                            {provider.capabilities.map((cap) => (
+                            {provider.capabilities.map(cap => (
                               <Badge key={cap} variant="outline" className="text-xs">
                                 {cap}
                               </Badge>
@@ -437,10 +483,20 @@ export default function AdminAIConfigPage() {
                           <div>Last: {new Date(provider.lastUsed).toLocaleDateString()}</div>
                         )}
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(provider)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(provider)}
+                        aria-label="Edit provider"
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(provider.id)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(provider.id)}
+                        aria-label="Delete provider"
+                      >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -454,9 +510,7 @@ export default function AdminAIConfigPage() {
       <Card>
         <CardHeader>
           <CardTitle>Quick Setup</CardTitle>
-          <CardDescription>
-            Set up common AI providers with default configurations
-          </CardDescription>
+          <CardDescription>Set up common AI providers with default configurations</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
@@ -465,28 +519,48 @@ export default function AdminAIConfigPage() {
           <ul className="space-y-2 text-sm">
             <li className="flex items-center gap-2">
               <strong>Groq:</strong>
-              <a href="https://console.groq.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a
+                href="https://console.groq.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
                 console.groq.com
               </a>
               <span className="text-muted-foreground">- Fastest, free tier available</span>
             </li>
             <li className="flex items-center gap-2">
               <strong>Google AI:</strong>
-              <a href="https://aistudio.google.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a
+                href="https://aistudio.google.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
                 aistudio.google.com
               </a>
               <span className="text-muted-foreground">- Good for vision/documents</span>
             </li>
             <li className="flex items-center gap-2">
               <strong>Anthropic:</strong>
-              <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a
+                href="https://console.anthropic.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
                 console.anthropic.com
               </a>
               <span className="text-muted-foreground">- Best for complex analysis</span>
             </li>
             <li className="flex items-center gap-2">
               <strong>OpenAI:</strong>
-              <a href="https://platform.openai.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a
+                href="https://platform.openai.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
                 platform.openai.com
               </a>
               <span className="text-muted-foreground">- General purpose</span>
@@ -495,5 +569,5 @@ export default function AdminAIConfigPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

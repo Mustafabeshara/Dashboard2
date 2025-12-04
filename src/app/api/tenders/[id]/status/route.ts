@@ -3,26 +3,20 @@
  * Handles tender status transitions
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { TenderStatus } from '@prisma/client'
+import { prisma } from '@/lib/prisma';
+import { TenderStatus } from '@prisma/client';
+import { NextRequest, NextResponse } from 'next/server';
 
 // PATCH /api/tenders/[id]/status - Update tender status
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
 
   try {
-    const body = await request.json()
-    const { status, notes } = body
+    const body = await request.json();
+    const { status, notes } = body;
 
     if (!status) {
-      return NextResponse.json(
-        { error: 'Status is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Status is required' }, { status: 400 });
     }
 
     // Validate status
@@ -33,25 +27,19 @@ export async function PATCH(
       'WON',
       'LOST',
       'CANCELLED',
-    ]
+    ];
 
     if (!validStatuses.includes(status)) {
-      return NextResponse.json(
-        { error: 'Invalid status' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
     // Check if tender exists
     const existing = await prisma.tender.findUnique({
       where: { id },
-    })
+    });
 
     if (!existing) {
-      return NextResponse.json(
-        { error: 'Tender not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Tender not found' }, { status: 404 });
     }
 
     // Update status
@@ -77,22 +65,15 @@ export async function PATCH(
           },
         },
       },
-    })
-
-    console.log(
-      `[Tender] Status updated: ${tender.id} (${tender.tenderNumber}) - ${existing.status} → ${status}`
-    )
+    });
 
     return NextResponse.json({
       success: true,
       data: tender,
       message: `Tender status updated to ${status}`,
-    })
+    });
   } catch (error) {
-    console.error('Error updating tender status:', error)
-    return NextResponse.json(
-      { error: 'Failed to update tender status' },
-      { status: 500 }
-    )
+    console.error('Error updating tender status:', error);
+    return NextResponse.json({ error: 'Failed to update tender status' }, { status: 500 });
   }
 }

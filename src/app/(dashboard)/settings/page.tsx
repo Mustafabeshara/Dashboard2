@@ -623,20 +623,20 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {apiKeys.some(k => k.source === 'environment') && (
+                {apiKeys?.some(k => k.source === 'environment') && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
                     <div className="flex items-center gap-2 text-green-800">
                       <CheckCircle className="w-4 h-4" />
                       <span className="font-medium">Using Environment Variables</span>
                     </div>
                     <p className="text-green-700 mt-1 text-xs">
-                      {apiKeys.filter(k => k.source === 'environment').length} API key(s) loaded
-                      from Railway/Vercel environment. These cannot be edited here - update them in
-                      your hosting platform's dashboard.
+                      {apiKeys?.filter(k => k.source === 'environment').length || 0} API key(s)
+                      loaded from Railway/Vercel environment. These cannot be edited here - update
+                      them in your hosting platform's dashboard.
                     </p>
                   </div>
                 )}
-                {apiKeys.length > 0 ? (
+                {(apiKeys?.length || 0) > 0 ? (
                   <div className="space-y-4">
                     {/* AI Providers */}
                     <div className="space-y-3">
@@ -661,7 +661,9 @@ export default function SettingsPage() {
                     <div className="space-y-3 pt-4 border-t">
                       <div className="flex items-center gap-2">
                         <Scan className="w-4 h-4 text-purple-600" />
-                        <h4 className="text-sm font-medium text-gray-700">OCR Providers (for scanned documents)</h4>
+                        <h4 className="text-sm font-medium text-gray-700">
+                          OCR Providers (for scanned documents)
+                        </h4>
                       </div>
                       {apiKeys
                         .filter(k => k.category === 'ocr')
@@ -680,12 +682,15 @@ export default function SettingsPage() {
                     <div className="space-y-3 pt-4 border-t">
                       <div className="flex items-center gap-2">
                         <Mail className="w-4 h-4 text-green-600" />
-                        <h4 className="text-sm font-medium text-gray-700">Email Configuration (SMTP)</h4>
+                        <h4 className="text-sm font-medium text-gray-700">
+                          Email Configuration (SMTP)
+                        </h4>
                       </div>
                       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm mb-3">
                         <p className="text-amber-800">
-                          <strong>Yahoo Mail Setup:</strong> Use <code>smtp.mail.yahoo.com</code> as host, port <code>587</code>,
-                          and generate an App Password in Yahoo Account Security settings.
+                          <strong>Yahoo Mail Setup:</strong> Use <code>smtp.mail.yahoo.com</code> as
+                          host, port <code>587</code>, and generate an App Password in Yahoo Account
+                          Security settings.
                         </p>
                       </div>
                       {apiKeys

@@ -205,6 +205,7 @@ export function Sidebar({ pendingApprovals = 0, alerts = 0 }: SidebarProps) {
           size="icon"
           className="text-slate-400 hover:text-white hover:bg-slate-800"
           onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <ChevronLeft
             className={cn('h-5 w-5 transition-transform', collapsed && 'rotate-180')}
@@ -349,6 +350,7 @@ export function Sidebar({ pendingApprovals = 0, alerts = 0 }: SidebarProps) {
                 size="icon"
                 className="text-slate-400 hover:text-white hover:bg-slate-800"
                 onClick={() => signOut({ callbackUrl: '/login' })}
+                aria-label="Sign out"
               >
                 <LogOut className="h-4 w-4" />
               </Button>

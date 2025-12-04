@@ -73,7 +73,7 @@ class EmailManager {
         return true
       }
     } catch (error) {
-      logger.debug('Could not load email settings from database', error as Error)
+      logger.debug('Could not load email settings from database', { error })
     }
     return false
   }

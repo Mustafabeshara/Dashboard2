@@ -93,6 +93,7 @@ export function Header({ notifications = [] }: HeaderProps) {
           <Input
             type="search"
             placeholder="Search..."
+            aria-label="Global search"
             className="w-64 pl-9 bg-gray-50 border-gray-200"
           />
         </div>
@@ -100,7 +101,7 @@ export function Header({ notifications = [] }: HeaderProps) {
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
               <Bell className="h-5 w-5 text-gray-500" />
               {unreadCount > 0 && (
                 <Badge
@@ -158,7 +159,7 @@ export function Header({ notifications = [] }: HeaderProps) {
         </DropdownMenu>
 
         {/* Help */}
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" aria-label="Help">
           <HelpCircle className="h-5 w-5 text-gray-500" />
         </Button>
       </div>

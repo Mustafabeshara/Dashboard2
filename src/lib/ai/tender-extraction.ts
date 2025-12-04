@@ -6,6 +6,7 @@
 import { invokeUnifiedLLM, LLMProvider, getRecommendedProvider } from './llm-provider';
 import { TENDER_EXTRACTION_PROMPT, TENDER_EXTRACTION_SYSTEM_PROMPT } from './config';
 import { validateTenderExtractionWithZod, sanitizeTenderExtraction } from './tender-validation';
+import { sanitizePromptInput, validateAIResponse } from './prompt-sanitizer';
 
 export interface TenderExtractionResult {
   reference: string;
@@ -48,16 +49,12 @@ export function parseTenderExtractionResult(extractedText: string): TenderExtrac
     const validation = validateTenderExtractionWithZod(sanitizedData);
     
     if (validation.success && validation.data) {
-      console.log('Successfully validated tender extraction with Zod');
       return validation.data;
     } else {
-      console.warn('Zod validation failed:', validation.errors?.flatten());
-      
       // Try to extract partial data using regex patterns as fallback
       const partialData = extractPartialData(cleanedText);
-      
+
       if (partialData) {
-        console.log('Successfully extracted partial data from malformed JSON');
         // Validate the partial data as well
         const partialValidation = validateTenderExtractionWithZod(partialData);
         if (partialValidation.success && partialValidation.data) {
@@ -84,14 +81,14 @@ export function parseTenderExtractionResult(extractedText: string): TenderExtrac
       },
     };
   } catch (e) {
-    console.error('JSON parsing error:', e);
-    console.error('Raw extracted text:', cleanedText);
+    // Don't log potentially sensitive extracted text
+    console.error('JSON parsing error:', e instanceof Error ? e.message : 'Parse failed');
+    console.error('Extracted text length:', cleanedText.length);
     
     // Try to extract partial data using regex patterns
     const partialData = extractPartialData(cleanedText);
     
     if (partialData) {
-      console.log('Successfully extracted partial data from malformed JSON');
       // Validate the partial data
       const partialValidation = validateTenderExtractionWithZod(partialData);
       if (partialValidation.success && partialValidation.data) {
@@ -192,6 +189,18 @@ function extractPartialData(text: string): TenderExtractionResult | null {
 }
 
 /**
+ * Check if Gemini is properly configured
+ */
+async function isGeminiConfigured(): Promise<boolean> {
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
+  if (!geminiKey) return false;
+
+  // Check if it's a placeholder key
+  const placeholderPatterns = ['your-', '-key', 'placeholder', 'changeme', 'example', 'xxx', 'test-', 'dummy'];
+  return !placeholderPatterns.some(p => geminiKey.toLowerCase().includes(p.toLowerCase())) && geminiKey.length > 20;
+}
+
+/**
  * Extract tender data from document
  * @param fileUrl - Public URL of the document (PDF or image)
  * @param mimeType - MIME type of the document
@@ -201,10 +210,19 @@ export async function extractTenderFromDocument(
   fileUrl: string,
   mimeType: string
 ): Promise<TenderExtractionResult> {
-  console.log(`[ExtractTender] Processing document, URL: ${fileUrl}, mimeType: ${mimeType}`);
+  const isPdf = mimeType === 'application/pdf';
+  const geminiAvailable = await isGeminiConfigured();
+
+  // If it's a PDF and Gemini is not available, we need to extract text first
+  // since Groq doesn't support file_url
+  if (isPdf && !geminiAvailable) {
+    console.log('[ExtractTender] Gemini not configured, using text extraction + Groq for PDF');
+    // The caller should have already extracted text and called extractTenderFromText
+    // If we get here, it means they're trying to use document extraction without Gemini
+    throw new Error('PDF document extraction requires either: (1) GEMINI_API_KEY configured, or (2) text extraction before calling this function. Please extract text from the PDF first and use extractTenderFromText().');
+  }
 
   // Determine content type based on mime type
-  const isPdf = mimeType === 'application/pdf';
   const contentPart = isPdf
     ? {
         type: 'file_url' as const,
@@ -214,14 +232,11 @@ export async function extractTenderFromDocument(
 
   // Determine recommended provider based on file type (now async)
   const provider = isPdf ? LLMProvider.GEMINI : await getRecommendedProvider('image');
-  console.log(`[ExtractTender] Using provider: ${provider}`);
 
   // Retry mechanism
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      console.log(`[ExtractTender] Attempt ${attempt}/3`);
-      
       const response = await invokeUnifiedLLM(
         {
           messages: [
@@ -246,35 +261,32 @@ export async function extractTenderFromDocument(
       }
 
       const extractedText = typeof rawContent === 'string' ? rawContent : '{}';
-      console.log(`[ExtractTender] Raw extracted text length: ${extractedText.length}`);
-
       const parsedData = parseTenderExtractionResult(extractedText);
-      
+
       // If we got a result with very low confidence, retry with a different provider
       if (parsedData.confidence?.overall && parsedData.confidence.overall < 0.3 && attempt < 3) {
-        console.log(`[ExtractTender] Low confidence result (${parsedData.confidence.overall}), retrying with different provider`);
         lastError = new Error('Low confidence extraction result');
         continue;
       }
-      
-      console.log(`[ExtractTender] Successfully processed document`);
+
       return parsedData;
-    } catch (llmError: any) {
-      console.error(`[ExtractTender] LLM invocation failed on attempt ${attempt}:`, llmError);
-      lastError = llmError;
-      
+    } catch (llmError: unknown) {
+      const errorMessage = llmError instanceof Error ? llmError.message : 'Unknown error';
+      console.error(`[ExtractTender] LLM invocation failed on attempt ${attempt}:`, errorMessage);
+      lastError = llmError instanceof Error ? llmError : new Error(errorMessage);
+
       // Don't retry on validation errors
-      if (llmError.message?.includes('Invalid LLM response') || llmError.message?.includes('No content')) {
+      if (errorMessage.includes('Invalid LLM response') || errorMessage.includes('No content')) {
         break;
       }
-      
+
       // Wait before retrying (exponential backoff)
       if (attempt < 3) {
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
     }
   }
-  
+
   throw new Error(`LLM extraction failed after 3 attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
@@ -286,18 +298,15 @@ export async function extractTenderFromDocument(
 export async function extractTenderFromText(
   text: string
 ): Promise<TenderExtractionResult> {
-  console.log(`[ExtractTenderText] Processing text content, length: ${text.length}`);
-
-  // Truncate text if too long to avoid token limits
+  // Sanitize and truncate text to prevent prompt injection
   const maxLength = 100000; // Adjust based on model limits
-  const truncatedText = text.length > maxLength ? text.substring(0, maxLength) + '\n... [truncated]' : text;
+  const sanitizedText = sanitizePromptInput(text, { maxLength, allowNewlines: true, stripHtml: true });
+  const truncatedText = sanitizedText.length > maxLength ? sanitizedText.substring(0, maxLength) + '\n... [truncated]' : sanitizedText;
 
   // Retry mechanism
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      console.log(`[ExtractTenderText] Attempt ${attempt}/3`);
-      
       const response = await invokeUnifiedLLM(
         {
           messages: [
@@ -324,36 +333,33 @@ export async function extractTenderFromText(
       }
 
       const extractedText = typeof rawContent === 'string' ? rawContent : '{}';
-      console.log(`[ExtractTenderText] Raw extracted text length: ${extractedText.length}`);
-
       const parsedData = parseTenderExtractionResult(extractedText);
-      
+
       // If we got a result with very low confidence, retry
       if (parsedData.confidence?.overall && parsedData.confidence.overall < 0.3 && attempt < 3) {
-        console.log(`[ExtractTenderText] Low confidence result (${parsedData.confidence.overall}), retrying`);
         lastError = new Error('Low confidence extraction result');
         continue;
       }
-      
-      console.log(`[ExtractTenderText] Successfully processed text content`);
+
       return parsedData;
-    } catch (llmError: any) {
-      console.error(`[ExtractTenderText] LLM invocation failed on attempt ${attempt}:`, llmError);
-      lastError = llmError;
-      
+    } catch (llmError: unknown) {
+      const errorMsg = llmError instanceof Error ? llmError.message : 'Unknown error';
+      console.error(`[ExtractTenderText] LLM invocation failed on attempt ${attempt}:`, errorMsg);
+      lastError = llmError instanceof Error ? llmError : new Error(errorMsg);
+
       // Don't retry on validation errors
-      if (llmError.message?.includes('Invalid LLM response') || llmError.message?.includes('No content')) {
+      if (errorMsg.includes('Invalid LLM response') || errorMsg.includes('No content')) {
         break;
       }
-      
+
       // Wait before retrying (exponential backoff)
       if (attempt < 3) {
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
     }
   }
-  
-  throw new Error(`LLM extraction failed after 3 attempts: ${lastError?.message || 'Unknown error'}`);
+
+  throw new Error(`LLM text extraction failed after 3 attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
 /**

@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import prisma from './prisma';
+import { AUTH_SECURITY } from './config/security';
 
 /**
  * Get NextAuth secret - fails in production if not set
@@ -126,8 +127,21 @@ export const authOptions: NextAuthOptions = {
             department: user.department || undefined,
           };
         } catch (error) {
-          console.error('Authentication error:', error);
-          throw error;
+          // Log with full error details including stack trace
+          if (error instanceof Error) {
+            // Re-throw known authentication errors as-is (they have user-friendly messages)
+            if (error.message.includes('Invalid email') ||
+                error.message.includes('Account is inactive') ||
+                error.message.includes('Account not found') ||
+                error.message.includes('required')) {
+              throw error;
+            }
+            // For unexpected errors, wrap with context but preserve stack
+            const wrappedError = new Error(`Authentication failed: ${error.message}`);
+            wrappedError.cause = error;
+            throw wrappedError;
+          }
+          throw new Error('Authentication failed due to unexpected error');
         }
       },
     }),
@@ -210,10 +224,10 @@ export function validatePassword(password: string): { valid: boolean; errors: st
 }
 
 /**
- * Hash a password
+ * Hash a password with configurable cost factor
  */
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, AUTH_SECURITY.BCRYPT_COST_FACTOR);
 }
 
 /**

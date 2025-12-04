@@ -3,15 +3,12 @@
  * Creates tender from document extraction results
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/tenders/[id]/extract - Create tender from document extraction
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: documentId } = await params
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: documentId } = await params;
 
   try {
     // Get document with latest extraction
@@ -27,37 +24,31 @@ export async function POST(
           take: 1,
         },
       },
-    })
+    });
 
     if (!document) {
-      return NextResponse.json(
-        { error: 'Document not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
     if (document.extractions.length === 0) {
-      return NextResponse.json(
-        { error: 'No extraction found for this document' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'No extraction found for this document' }, { status: 404 });
     }
 
-    const extraction = document.extractions[0]
-    const extractedData = extraction.extractedData as any
+    const extraction = document.extractions[0];
+    const extractedData = extraction.extractedData as any;
 
     // Validate extracted data
     if (!extractedData.reference || !extractedData.title) {
       return NextResponse.json(
         { error: 'Extracted data is incomplete. Reference and title are required.' },
         { status: 400 }
-      )
+      );
     }
 
     // Check if tender with this number already exists
     const existing = await prisma.tender.findUnique({
       where: { tenderNumber: extractedData.reference },
-    })
+    });
 
     if (existing) {
       return NextResponse.json(
@@ -66,24 +57,24 @@ export async function POST(
           existingTenderId: existing.id,
         },
         { status: 409 }
-      )
+      );
     }
 
     // Parse closing date
-    let closingDate: Date | null = null
+    let closingDate: Date | null = null;
     if (extractedData.closingDate) {
       try {
-        closingDate = new Date(extractedData.closingDate)
+        closingDate = new Date(extractedData.closingDate);
         if (isNaN(closingDate.getTime())) {
-          closingDate = null
+          closingDate = null;
         }
       } catch (e) {
-        console.warn('Failed to parse closing date:', extractedData.closingDate)
+        console.warn('Failed to parse closing date:', extractedData.closingDate);
       }
     }
 
     // Determine customer from organization
-    let customerId: string | null = null
+    let customerId: string | null = null;
     if (extractedData.organization) {
       // Try to find existing customer by name
       const customer = await prisma.customer.findFirst({
@@ -93,10 +84,10 @@ export async function POST(
             mode: 'insensitive',
           },
         },
-      })
+      });
 
       if (customer) {
-        customerId = customer.id
+        customerId = customer.id;
       }
     }
 
@@ -135,7 +126,7 @@ export async function POST(
           },
         },
       },
-    })
+    });
 
     // Link document to tender
     await prisma.document.update({
@@ -144,11 +135,7 @@ export async function POST(
         moduleType: 'TENDER',
         moduleId: tender.id,
       },
-    })
-
-    console.log(
-      `[Tender] Created tender from extraction: ${tender.id} (${tender.tenderNumber})`
-    )
+    });
 
     return NextResponse.json(
       {
@@ -157,12 +144,9 @@ export async function POST(
         message: 'Tender created from extraction successfully',
       },
       { status: 201 }
-    )
+    );
   } catch (error) {
-    console.error('Error creating tender from extraction:', error)
-    return NextResponse.json(
-      { error: 'Failed to create tender from extraction' },
-      { status: 500 }
-    )
+    console.error('Error creating tender from extraction:', error);
+    return NextResponse.json({ error: 'Failed to create tender from extraction' }, { status: 500 });
   }
 }
