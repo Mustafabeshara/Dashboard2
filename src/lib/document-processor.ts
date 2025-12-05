@@ -143,6 +143,70 @@ export async function extractTextFromBuffer(
  * Extract text content from a PDF buffer using pdf-parse
  * Uses a robust approach that works with Next.js
  */
+type PdfParseFn = (buffer: Buffer) => Promise<{ text: string; numpages: number; info: unknown }>;
+let pdfParseCache: PdfParseFn | null = null;
+
+async function getPdfParse(): Promise<PdfParseFn> {
+  if (pdfParseCache) return pdfParseCache;
+
+  const pdfModule = await import('pdf-parse');
+  // Some builds of pdf-parse expose the parser at nested defaults or via the subpath
+  const altModule = await import('pdf-parse/lib/pdf-parse.js').catch(() => ({}) as any);
+
+  const normalizeResult = (result: any) => ({
+    text: result?.text ?? '',
+    numpages:
+      result?.numpages ??
+      result?.total ??
+      result?.numPages ??
+      (Array.isArray(result?.pages) ? result.pages.length : 0),
+    info: result?.info ?? {},
+  });
+
+  const wrapCandidate = (candidate: any): PdfParseFn | null => {
+    if (typeof candidate === 'function') {
+      // pdf-parse legacy default export (fn)
+      return async (buffer: Buffer) => normalizeResult(await candidate(buffer));
+    }
+
+    const PDFParseClass = candidate?.PDFParse || candidate?.default?.PDFParse;
+    if (typeof PDFParseClass === 'function') {
+      return async (buffer: Buffer) => {
+        // pdf-parse >=2.4 exports a class with getText()
+        const parser = new PDFParseClass({ data: buffer, verbosity: 0 });
+        const result = await parser.getText();
+        return normalizeResult(result);
+      };
+    }
+
+    return null;
+  };
+
+  const candidates = [
+    (pdfModule as any).default,
+    (pdfModule as any).default?.default,
+    (pdfModule as any).parse,
+    (pdfModule as any).pdfParse,
+    pdfModule as any,
+    (pdfModule as any).PDFParse,
+    (altModule as any).default,
+    (altModule as any).default?.default,
+    (altModule as any).PDFParse,
+    altModule as any,
+  ];
+
+  const resolved = candidates
+    .map(candidate => wrapCandidate(candidate))
+    .find((fn): fn is PdfParseFn => typeof fn === 'function');
+
+  if (!resolved) {
+    throw new Error('pdf-parse module did not export a usable parser');
+  }
+
+  pdfParseCache = resolved;
+  return pdfParseCache;
+}
+
 async function extractTextFromPDF(buffer: Buffer): Promise<ProcessedDocument> {
   try {
     logger.info('Starting PDF text extraction', {
@@ -151,29 +215,7 @@ async function extractTextFromPDF(buffer: Buffer): Promise<ProcessedDocument> {
       },
     });
 
-    // Use pdf-parse with a workaround for Next.js bundling issues
-    // We need to require it dynamically to avoid bundling issues
-    let pdfParse: (buffer: Buffer) => Promise<{ text: string; numpages: number; info: unknown }>;
-
-    try {
-      // Try the standard import first
-      const pdfModule = require('pdf-parse');
-      pdfParse = pdfModule.default || pdfModule;
-    } catch {
-      // If that fails, try another approach
-      logger.warn('Standard pdf-parse import failed, trying alternative');
-
-      // Return a placeholder that prompts AI processing
-      return {
-        text: '[PDF requires visual AI extraction - text extraction unavailable]',
-        images: [],
-        metadata: {
-          totalPages: 0,
-          isMultiPage: false,
-        },
-      };
-    }
-
+    const pdfParse = await getPdfParse();
     const pdfData = await pdfParse(buffer);
 
     logger.info('PDF text extraction completed', {
