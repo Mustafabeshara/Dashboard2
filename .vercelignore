@@ -1,0 +1,50 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Testing
+coverage
+.nyc_output
+*.log
+
+# Local development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Electron
+electron
+dist-electron
+build
+*.app
+*.exe
+*.dmg
+*.deb
+*.rpm
+
+# Desktop specific
+prisma/schema.local.prisma
+uploads
+
+# Documentation
+docs
+docs-reference
+*.md
+!README.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore

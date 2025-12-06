@@ -23,7 +23,8 @@
   "scripts": {
     "dev": "next dev",
     "dev:stable": "NODE_OPTIONS='--max-old-space-size=4096' next dev --turbo",
-    "build": "next build",
+    "build": "prisma generate && prisma migrate deploy && next build",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "next lint",
     "validate:env": "tsx scripts/validate-env.ts",
