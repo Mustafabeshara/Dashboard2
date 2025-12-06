@@ -88,3 +88,15 @@ export type {
   TenderItemMatch,
   ProductComparisonResult,
 } from './product-matcher'
+
+// Pricing Advisor
+export {
+  generatePricingRecommendation,
+  analyzeTenderPricing,
+} from './pricing-advisor'
+export type {
+  PricingRecommendation,
+  PricingFactor,
+  CompetitorPricing,
+  MarketIntelligence,
+} from './pricing-advisor'
