@@ -76,3 +76,15 @@ export type {
   UsageLogEntry,
   PaginatedLogs,
 } from './usage-tracker'
+
+// Product Matching
+export {
+  findMatchingProducts,
+  compareAllTenderItems,
+  checkCatalogCoverage,
+} from './product-matcher'
+export type {
+  ProductMatch,
+  TenderItemMatch,
+  ProductComparisonResult,
+} from './product-matcher'
