@@ -431,14 +431,30 @@ export async function analyzeTenderPricing(tenderId: string): Promise<{
       }))
     );
 
+    // Cost estimation factor (90% of minimum price)
+    // This assumes cost is typically 90% of the minimum viable selling price
+    const COST_ESTIMATION_FACTOR = 0.9;
+
+    // Create a map of item quantities for O(1) lookup
+    const itemQuantityMap = new Map(
+      tender.items.map(item => [item.id, item.quantity])
+    );
+
     // Calculate totals
     const totalRecommended = itemRecommendations.reduce(
-      (sum, item) => sum + item.recommendation.recommendedPrice * tender.items.find(i => i.id === item.itemId)!.quantity,
+      (sum, item) => {
+        const quantity = itemQuantityMap.get(item.itemId) || 0;
+        return sum + item.recommendation.recommendedPrice * quantity;
+      },
       0
     );
 
     const totalCost = itemRecommendations.reduce(
-      (sum, item) => sum + item.recommendation.priceRange.minimum * 0.9 * tender.items.find(i => i.id === item.itemId)!.quantity, // Estimate cost as 90% of minimum price
+      (sum, item) => {
+        const quantity = itemQuantityMap.get(item.itemId) || 0;
+        // Estimate cost as percentage of minimum viable price
+        return sum + item.recommendation.priceRange.minimum * COST_ESTIMATION_FACTOR * quantity;
+      },
       0
     );
 

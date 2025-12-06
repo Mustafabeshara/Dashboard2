@@ -5,7 +5,7 @@
  */
 
 import { invokeUnifiedLLM, LLMProvider, Message } from './llm-provider';
-import { sanitizePromptInput, createSafePrompt } from './prompt-sanitizer';
+import { sanitizePromptInput } from './prompt-sanitizer';
 import prisma from '@/lib/prisma';
 
 export interface ProductMatch {
@@ -107,17 +107,28 @@ async function compareWithAI(params: {
   const sanitizedTenderDesc = sanitizePromptInput(tenderItemDescription, { maxLength: 500 });
   const sanitizedProductName = sanitizePromptInput(productName, { maxLength: 200 });
 
+  // Sanitize specifications by stringifying safely
+  const sanitizeTenderSpecsString = Object.entries(tenderSpecs)
+    .map(([k, v]) => `${sanitizePromptInput(String(k), { maxLength: 100 })}: ${sanitizePromptInput(String(v), { maxLength: 200 })}`)
+    .join('\n');
+  
+  const sanitizeProductSpecsString = Object.entries(productSpecs)
+    .map(([k, v]) => `${sanitizePromptInput(String(k), { maxLength: 100 })}: ${sanitizePromptInput(String(v), { maxLength: 200 })}`)
+    .join('\n');
+
   const prompt = `You are a medical equipment specification matching expert. Compare the tender requirement with the supplier's product.
 
 **TENDER REQUIREMENT:**
 Item: ${sanitizedTenderDesc}
-Required Specifications: ${JSON.stringify(tenderSpecs, null, 2)}
-Required Certifications: ${requiredCertifications.join(', ') || 'Not specified'}
+Required Specifications:
+${sanitizeTenderSpecsString || 'Not specified'}
+Required Certifications: ${requiredCertifications.map(c => sanitizePromptInput(c, { maxLength: 100 })).join(', ') || 'Not specified'}
 
 **SUPPLIER PRODUCT:**
 Product Name: ${sanitizedProductName}
-Product Specifications: ${JSON.stringify(productSpecs, null, 2)}
-Product Certifications: ${productCertifications.join(', ') || 'None listed'}
+Product Specifications:
+${sanitizeProductSpecsString || 'None listed'}
+Product Certifications: ${productCertifications.map(c => sanitizePromptInput(c, { maxLength: 100 })).join(', ') || 'None listed'}
 
 **ANALYSIS INSTRUCTIONS:**
 1. Determine if the product matches the tender requirements
