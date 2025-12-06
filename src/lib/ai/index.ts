@@ -76,3 +76,27 @@ export type {
   UsageLogEntry,
   PaginatedLogs,
 } from './usage-tracker'
+
+// Product Matching
+export {
+  findMatchingProducts,
+  compareAllTenderItems,
+  checkCatalogCoverage,
+} from './product-matcher'
+export type {
+  ProductMatch,
+  TenderItemMatch,
+  ProductComparisonResult,
+} from './product-matcher'
+
+// Pricing Advisor
+export {
+  generatePricingRecommendation,
+  analyzeTenderPricing,
+} from './pricing-advisor'
+export type {
+  PricingRecommendation,
+  PricingFactor,
+  CompetitorPricing,
+  MarketIntelligence,
+} from './pricing-advisor'

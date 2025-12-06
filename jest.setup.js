@@ -138,6 +138,18 @@ jest.mock('next-auth/next', () => ({
   })),
 }))
 
+// Mock NextAuth providers
+jest.mock('next-auth/providers/credentials', () => ({
+  __esModule: true,
+  default: jest.fn(() => ({
+    id: 'credentials',
+    name: 'Credentials',
+    type: 'credentials',
+    credentials: {},
+    authorize: jest.fn(),
+  })),
+}))
+
 // Mock Prisma Client
 jest.mock('@/lib/prisma', () => ({
   prisma: {

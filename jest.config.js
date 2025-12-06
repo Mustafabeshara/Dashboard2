@@ -27,7 +27,7 @@ const customJestConfig = {
     '/docs-reference/', // Vitest tests, not Jest
   ],
   transformIgnorePatterns: [
-    '/node_modules/(?!(jose|openid-client|@panva)/)',
+    '/node_modules/(?!(jose|openid-client|@panva|next-auth|@auth)/)',
   ],
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
